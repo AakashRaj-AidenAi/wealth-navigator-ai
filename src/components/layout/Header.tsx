@@ -1,4 +1,4 @@
-import { Bell, Search, User, ChevronDown } from 'lucide-react';
+import { Bell, Search, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -12,6 +12,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { marketData } from '@/data/mockData';
 import { cn } from '@/lib/utils';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 
 export const Header = () => {
   return (
@@ -52,6 +53,9 @@ export const Header = () => {
               ⌘K
             </kbd>
           </div>
+
+          {/* Theme Toggle */}
+          <ThemeToggle />
 
           {/* Notifications */}
           <DropdownMenu>

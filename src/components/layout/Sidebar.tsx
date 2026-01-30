@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
@@ -16,7 +15,6 @@ import {
   Bot,
   ChevronLeft,
   ChevronRight,
-  Bell
 } from 'lucide-react';
 
 interface NavItem {
@@ -44,8 +42,12 @@ const secondaryNavItems: NavItem[] = [
   { label: 'Settings', icon: Settings, href: '/settings' },
 ];
 
-export const Sidebar = () => {
-  const [collapsed, setCollapsed] = useState(false);
+interface SidebarProps {
+  collapsed: boolean;
+  setCollapsed: (collapsed: boolean) => void;
+}
+
+export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
   const location = useLocation();
 
   return (
