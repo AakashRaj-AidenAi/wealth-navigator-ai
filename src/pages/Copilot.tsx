@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import ReactMarkdown from 'react-markdown';
 import {
   Bot,
   Send,
@@ -12,14 +14,11 @@ import {
   TrendingUp,
   AlertTriangle,
   Lightbulb,
-  FileText,
   Users,
-  Target,
   Shield,
   Calculator,
   Calendar,
   Briefcase,
-  BarChart3
 } from 'lucide-react';
 
 interface Message {
@@ -27,7 +26,6 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  type?: 'insight' | 'alert' | 'recommendation' | 'analysis';
 }
 
 interface Agent {
@@ -50,13 +48,16 @@ const agents: Agent[] = [
 const samplePrompts = [
   "Analyze concentration risk across all family office portfolios",
   "Identify tax-loss harvesting opportunities for Q1",
-  "Prepare talking points for Victoria Sterling's review meeting",
-  "What's the impact of recent Fed rate decisions on our bond allocations?",
+  "Prepare talking points for a client review meeting",
+  "What's the impact of recent Fed rate decisions on bond allocations?",
   "Flag any clients approaching suitability guideline limits",
-  "Generate a market outlook summary for next week's CIO meeting",
+  "Generate a market outlook summary for next week",
 ];
 
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/portfolio-copilot`;
+
 const Copilot = () => {
+  const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -67,10 +68,17 @@ const Copilot = () => {
   ]);
   const [input, setInput] = useState('');
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
-  const [isTyping, setIsTyping] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -81,144 +89,102 @@ const Copilot = () => {
 
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
-    setIsTyping(true);
+    setIsLoading(true);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: generateDetailedResponse(input, selectedAgent),
-        timestamp: new Date(),
-        type: getResponseType(input),
-      };
-      setMessages((prev) => [...prev, aiResponse]);
-      setIsTyping(false);
-    }, 1500);
-  };
+    let assistantContent = "";
 
-  const getResponseType = (query: string): 'insight' | 'alert' | 'recommendation' | 'analysis' => {
-    const lower = query.toLowerCase();
-    if (lower.includes('risk') || lower.includes('alert') || lower.includes('flag')) return 'alert';
-    if (lower.includes('recommend') || lower.includes('suggest') || lower.includes('opportunity')) return 'recommendation';
-    if (lower.includes('analyze') || lower.includes('report') || lower.includes('summary')) return 'analysis';
-    return 'insight';
-  };
+    try {
+      const resp = await fetch(CHAT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ 
+          messages: [...messages, userMessage].map(m => ({ role: m.role, content: m.content })),
+          agentType: selectedAgent 
+        }),
+      });
 
-  const generateDetailedResponse = (query: string, agentId: string | null): string => {
-    const lowerQuery = query.toLowerCase();
+      if (!resp.ok) {
+        const errorData = await resp.json().catch(() => ({}));
+        throw new Error(errorData.error || `Request failed with status ${resp.status}`);
+      }
 
-    if (lowerQuery.includes('concentration') || lowerQuery.includes('risk')) {
-      return `## Portfolio Concentration Analysis
+      if (!resp.body) throw new Error("No response body");
 
-I've analyzed all 8 family office portfolios for concentration risk. Here are my findings:
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let textBuffer = "";
 
-### 🔴 High Priority Alerts
-| Client | Sector | Concentration | Limit | Action Required |
-|--------|--------|--------------|-------|-----------------|
-| Nakamura Estate | Technology | 27.3% | 25% | Immediate rebalance |
-| Quantum Ventures | Healthcare | 24.8% | 25% | Monitor closely |
+      const assistantId = (Date.now() + 1).toString();
+      setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '', timestamp: new Date() }]);
 
-### 📊 Sector Exposure Summary
-- **Technology**: Firm-wide 22.4% (Target: 18-20%)
-- **Healthcare**: Firm-wide 15.2% (Within range)
-- **Financials**: Firm-wide 12.8% (Within range)
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        textBuffer += decoder.decode(value, { stream: true });
 
-### 💡 Recommendations
-1. Initiate conversation with Nakamura Estate about reducing NVDA and MSFT positions
-2. Review Quantum Ventures' biotech positions before earnings
-3. Consider rotating tech gains into underweight sectors (Energy, Materials)
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
 
-Would you like me to draft a client communication or generate a detailed rebalance proposal?`;
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (line.startsWith(":") || line.trim() === "") continue;
+          if (!line.startsWith("data: ")) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") break;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) {
+              assistantContent += content;
+              setMessages(prev => 
+                prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantContent } : m)
+              );
+            }
+          } catch {
+            textBuffer = line + "\n" + textBuffer;
+            break;
+          }
+        }
+      }
+
+      // Final flush
+      if (textBuffer.trim()) {
+        for (let raw of textBuffer.split("\n")) {
+          if (!raw || raw.startsWith(":") || !raw.startsWith("data: ")) continue;
+          const jsonStr = raw.slice(6).trim();
+          if (jsonStr === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              assistantContent += content;
+              setMessages(prev => 
+                prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantContent } : m)
+              );
+            }
+          } catch { /* ignore */ }
+        }
+      }
+
+    } catch (error) {
+      console.error("Chat error:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to get AI response",
+        variant: "destructive"
+      });
+      // Remove the empty assistant message on error
+      setMessages(prev => prev.filter(m => m.content !== ''));
+    } finally {
+      setIsLoading(false);
     }
-
-    if (lowerQuery.includes('tax') || lowerQuery.includes('harvesting')) {
-      return `## Tax-Loss Harvesting Opportunities
-
-Analyzing unrealized positions across all portfolios for Q1 tax optimization...
-
-### 💰 Top Opportunities (Ranked by Tax Savings)
-
-| Client | Security | Unrealized Loss | Tax Savings Est. | Wash Sale Risk |
-|--------|----------|-----------------|------------------|----------------|
-| Victoria Sterling | AMZN | -$2.4M | $912K | Low |
-| Raghavan Family | TSLA | -$1.8M | $684K | Medium |
-| Harrison Trust | VZ | -$890K | $338K | Low |
-
-### ⏰ Time-Sensitive
-- Q1 window closes **March 15, 2025**
-- Victoria Sterling's gains of $8.2M would benefit most from harvesting
-- Recommend action within 2 weeks to allow settlement
-
-### 🔄 Replacement Securities
-For wash sale compliance, I recommend:
-- AMZN → GOOG or META (similar growth profile)
-- TSLA → RIVN or broad EV ETF (DRIV)
-- VZ → T or VOX (telecom exposure maintained)
-
-Shall I generate trade tickets for these recommendations?`;
-    }
-
-    if (lowerQuery.includes('victoria') || lowerQuery.includes('meeting') || lowerQuery.includes('prep')) {
-      return `## Client Meeting Brief: Victoria Sterling
-
-**Meeting:** Q1 Portfolio Review
-**Date:** February 5, 2025 at 2:00 PM
-**Location:** Main Conference Room
-
----
-
-### 📊 Portfolio Performance
-| Metric | Value | vs Benchmark |
-|--------|-------|--------------|
-| YTD Return | +18.2% | +4.7% |
-| Since Inception | +142% | +38% |
-| Sharpe Ratio | 1.42 | Strong |
-
-### 🎯 Key Talking Points
-
-1. **Outstanding Performance**
-   - Outperforming benchmark by 470bps YTD
-   - Technology allocation (+45% of alpha generation)
-   
-2. **Tax Planning**
-   - $2.4M harvesting opportunity in AMZN
-   - Estimated tax savings: $912K
-   - Recommend discussing before March deadline
-
-3. **Upcoming Changes**
-   - Annual IPS review due
-   - Charitable giving discussion (foundation interest)
-   
-### ⚠️ Sensitive Topics
-- Recent divorce settlement may affect risk tolerance
-- Mentioned interest in ESG investments last call
-
-### 📎 Materials Prepared
-- Performance attribution report
-- Market outlook deck
-- Tax optimization proposal
-- ESG portfolio comparison
-
-Would you like me to email these materials to Victoria's assistant?`;
-    }
-
-    return `I understand you're asking about "${query}". Let me analyze this across your client portfolios and market data.
-
-### Analysis Summary
-
-Based on current portfolio positions and market conditions:
-
-1. **Portfolio Impact**: Evaluated across 147 client relationships with $2.86B AUM
-2. **Risk Assessment**: No immediate concerns flagged
-3. **Opportunity Identified**: 3 potential action items for advisor review
-
-### Recommended Next Steps
-- Schedule detailed review meeting
-- Generate comprehensive report
-- Set up monitoring alerts
-
-Would you like me to elaborate on any specific aspect or generate a formal report?`;
   };
 
   return (
@@ -283,7 +249,7 @@ Would you like me to elaborate on any specific aspect or generate a formal repor
                 <h2 className="font-semibold flex items-center gap-2">
                   WealthOS Copilot
                   <Badge variant="outline" className="text-xs bg-success/10 text-success border-success/20">
-                    Online
+                    AI Powered
                   </Badge>
                 </h2>
                 <p className="text-xs text-muted-foreground">
@@ -296,7 +262,7 @@ Would you like me to elaborate on any specific aspect or generate a formal repor
           </div>
 
           {/* Messages */}
-          <ScrollArea className="flex-1 p-6">
+          <ScrollArea className="flex-1 p-6" ref={scrollRef}>
             <div className="space-y-6 max-w-4xl mx-auto">
               {messages.map((message) => (
                 <div
@@ -319,32 +285,18 @@ Would you like me to elaborate on any specific aspect or generate a formal repor
                         : 'bg-secondary/50'
                     )}
                   >
-                    <div className="prose prose-sm prose-invert max-w-none">
-                      {message.content.split('\n').map((line, i) => {
-                        if (line.startsWith('##')) {
-                          return <h3 key={i} className="text-base font-semibold mt-2 mb-2">{line.replace('## ', '')}</h3>;
-                        }
-                        if (line.startsWith('###')) {
-                          return <h4 key={i} className="text-sm font-semibold mt-3 mb-1">{line.replace('### ', '')}</h4>;
-                        }
-                        if (line.startsWith('|')) {
-                          return null; // Tables handled separately
-                        }
-                        if (line.startsWith('- ') || line.startsWith('1.')) {
-                          return <p key={i} className="text-sm my-1 ml-2">{line}</p>;
-                        }
-                        return line ? <p key={i} className="text-sm my-1">{line}</p> : <br key={i} />;
-                      })}
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown>{message.content}</ReactMarkdown>
                     </div>
                   </div>
                   {message.role === 'user' && (
                     <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-medium">PS</span>
+                      <span className="text-xs font-medium">You</span>
                     </div>
                   )}
                 </div>
               ))}
-              {isTyping && (
+              {isLoading && messages[messages.length - 1]?.content === '' && (
                 <div className="flex gap-4">
                   <div className="h-8 w-8 rounded-full bg-gradient-gold flex items-center justify-center">
                     <Bot className="h-4 w-4 text-primary-foreground" />
@@ -370,10 +322,11 @@ Would you like me to elaborate on any specific aspect or generate a formal repor
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
                 placeholder="Ask about portfolios, clients, compliance, or market insights..."
                 className="flex-1 bg-secondary/50 h-12"
+                disabled={isLoading}
               />
               <Button
                 onClick={handleSend}
-                disabled={!input.trim() || isTyping}
+                disabled={!input.trim() || isLoading}
                 className="bg-gradient-gold hover:opacity-90 h-12 px-6"
               >
                 <Send className="h-4 w-4" />
