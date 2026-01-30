@@ -14,16 +14,251 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      clients: {
+        Row: {
+          advisor_id: string
+          client_name: string
+          created_at: string
+          email: string | null
+          id: string
+          phone: string | null
+          risk_profile: string | null
+          status: string | null
+          total_assets: number | null
+          updated_at: string
+        }
+        Insert: {
+          advisor_id: string
+          client_name: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          phone?: string | null
+          risk_profile?: string | null
+          status?: string | null
+          total_assets?: number | null
+          updated_at?: string
+        }
+        Update: {
+          advisor_id?: string
+          client_name?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          phone?: string | null
+          risk_profile?: string | null
+          status?: string | null
+          total_assets?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      goals: {
+        Row: {
+          client_id: string
+          created_at: string
+          current_amount: number | null
+          description: string | null
+          id: string
+          name: string
+          priority: string | null
+          status: string | null
+          target_amount: number
+          target_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          current_amount?: number | null
+          description?: string | null
+          id?: string
+          name: string
+          priority?: string | null
+          status?: string | null
+          target_amount: number
+          target_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          current_amount?: number | null
+          description?: string | null
+          id?: string
+          name?: string
+          priority?: string | null
+          status?: string | null
+          target_amount?: number
+          target_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goals_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          executed_at: string | null
+          id: string
+          notes: string | null
+          order_type: Database["public"]["Enums"]["order_type"]
+          price: number | null
+          quantity: number
+          status: Database["public"]["Enums"]["order_status"] | null
+          symbol: string
+          total_amount: number | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          executed_at?: string | null
+          id?: string
+          notes?: string | null
+          order_type: Database["public"]["Enums"]["order_type"]
+          price?: number | null
+          quantity: number
+          status?: Database["public"]["Enums"]["order_status"] | null
+          symbol: string
+          total_amount?: number | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          executed_at?: string | null
+          id?: string
+          notes?: string | null
+          order_type?: Database["public"]["Enums"]["order_type"]
+          price?: number | null
+          quantity?: number
+          status?: Database["public"]["Enums"]["order_status"] | null
+          symbol?: string
+          total_amount?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      reports: {
+        Row: {
+          created_at: string
+          data: Json | null
+          description: string | null
+          generated_by: string
+          id: string
+          report_type: Database["public"]["Enums"]["report_type"]
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          data?: Json | null
+          description?: string | null
+          generated_by: string
+          id?: string
+          report_type: Database["public"]["Enums"]["report_type"]
+          title: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json | null
+          description?: string | null
+          generated_by?: string
+          id?: string
+          report_type?: Database["public"]["Enums"]["report_type"]
+          title?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_client: { Args: never; Returns: boolean }
+      is_client_advisor: { Args: { _client_id: string }; Returns: boolean }
+      is_compliance_officer: { Args: never; Returns: boolean }
+      is_wealth_advisor: { Args: never; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "wealth_advisor" | "compliance_officer" | "client"
+      order_status: "pending" | "executed" | "cancelled"
+      order_type: "buy" | "sell"
+      report_type: "compliance" | "analytics" | "performance" | "risk"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +385,11 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["wealth_advisor", "compliance_officer", "client"],
+      order_status: ["pending", "executed", "cancelled"],
+      order_type: ["buy", "sell"],
+      report_type: ["compliance", "analytics", "performance", "risk"],
+    },
   },
 } as const
