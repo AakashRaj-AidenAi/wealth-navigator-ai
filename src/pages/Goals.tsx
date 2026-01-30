@@ -6,7 +6,7 @@ import { Target, Plus, TrendingUp, Calendar, CheckCircle2 } from 'lucide-react';
 import { NewGoalModal } from '@/components/modals/NewGoalModal';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-
+import { formatCurrency } from '@/lib/currency';
 interface Goal {
   id: string;
   name: string;
@@ -154,7 +154,7 @@ const Goals = () => {
                     <div>
                       <h3 className="font-semibold text-lg">{goal.name}</h3>
                       <p className="text-sm text-muted-foreground">
-                        Target: ${(Number(goal.target_amount) / 1000000).toFixed(1)}M 
+                        Target: {formatCurrency(goal.target_amount, true)} 
                         {goal.target_date ? ` by ${new Date(goal.target_date).toLocaleDateString()}` : ''}
                       </p>
                     </div>
@@ -173,7 +173,7 @@ const Goals = () => {
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Progress</span>
                       <span className="font-medium">
-                        ${(Number(goal.current_amount) / 1000000).toFixed(2)}M / ${(Number(goal.target_amount) / 1000000).toFixed(1)}M
+                        {formatCurrency(goal.current_amount, true)} / {formatCurrency(goal.target_amount, true)}
                       </span>
                     </div>
                     <Progress value={Math.min(progress, 100)} className="h-2" />

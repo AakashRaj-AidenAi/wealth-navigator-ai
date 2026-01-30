@@ -15,6 +15,7 @@ import { Plus, Search, Filter, Clock, CheckCircle2, XCircle, AlertCircle } from 
 import { NewOrderModal } from '@/components/modals/NewOrderModal';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatCurrency } from '@/lib/currency';
 
 interface Order {
   id: string;
@@ -113,7 +114,7 @@ const Orders = () => {
           <div className="glass rounded-xl p-5">
             <p className="text-sm text-muted-foreground">Total Volume</p>
             <p className="text-2xl font-semibold mt-1">
-              ${totalVolume >= 1000000 ? `${(totalVolume / 1000000).toFixed(1)}M` : `${(totalVolume / 1000).toFixed(0)}K`}
+              {formatCurrency(totalVolume, true)}
             </p>
           </div>
           <div className="glass rounded-xl p-5">

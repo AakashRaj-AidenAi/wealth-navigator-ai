@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
+import { formatCurrency } from '@/lib/currency';
 import { ChevronRight, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -26,16 +27,6 @@ const riskColors: Record<string, string> = {
   'aggressive': 'text-destructive',
   'moderate': 'text-warning',
   'conservative': 'text-success'
-};
-
-const formatCurrency = (amount: number | null): string => {
-  if (!amount) return '₹0';
-  if (amount >= 10000000) {
-    return `₹${(amount / 10000000).toFixed(2)} Cr`;
-  } else if (amount >= 100000) {
-    return `₹${(amount / 100000).toFixed(2)} L`;
-  }
-  return `₹${amount.toLocaleString('en-IN')}`;
 };
 
 export const ClientsTable = () => {
@@ -147,7 +138,7 @@ export const ClientsTable = () => {
                     </div>
                   </td>
                   <td className="py-4 px-5 text-right">
-                    <span className="font-medium tabular-nums">{formatCurrency(client.total_assets)}</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(client.total_assets, true)}</span>
                   </td>
                   <td className="py-4 px-5">
                     <span className={cn(

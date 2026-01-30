@@ -34,6 +34,7 @@ import {
 import { AddClientModal } from '@/components/modals/AddClientModal';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatCurrency } from '@/lib/currency';
 
 interface Client {
   id: string;
@@ -57,15 +58,6 @@ const statusColors: Record<string, string> = {
   'active': 'bg-success/10 text-success border-success/20',
   'inactive': 'bg-muted text-muted-foreground',
   'onboarding': 'bg-primary/10 text-primary border-primary/20'
-};
-
-const formatCurrency = (value: number) => {
-  if (value >= 1000000) {
-    return `$${(value / 1000000).toFixed(1)}M`;
-  } else if (value >= 1000) {
-    return `$${(value / 1000).toFixed(0)}K`;
-  }
-  return `$${value.toFixed(0)}`;
 };
 
 const Clients = () => {
@@ -213,7 +205,7 @@ const Clients = () => {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">Total Assets</span>
-                    <span className="font-semibold tabular-nums">{formatCurrency(Number(client.total_assets))}</span>
+                    <span className="font-semibold tabular-nums">{formatCurrency(Number(client.total_assets), true)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">Risk Profile</span>

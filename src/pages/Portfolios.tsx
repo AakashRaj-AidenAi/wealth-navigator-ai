@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
+import { formatCurrency } from '@/lib/currency';
 import {
   Table,
   TableBody,
@@ -40,18 +41,6 @@ const riskColors: Record<string, string> = {
   'aggressive': 'bg-destructive/20 text-destructive',
   'moderate': 'bg-warning/20 text-warning',
   'conservative': 'bg-success/20 text-success',
-};
-
-const formatCurrency = (amount: number | null, short = false): string => {
-  if (!amount) return '₹0';
-  if (short) {
-    if (amount >= 10000000) {
-      return `₹${(amount / 10000000).toFixed(2)} Cr`;
-    } else if (amount >= 100000) {
-      return `₹${(amount / 100000).toFixed(2)} L`;
-    }
-  }
-  return `₹${amount.toLocaleString('en-IN')}`;
 };
 
 const Portfolios = () => {

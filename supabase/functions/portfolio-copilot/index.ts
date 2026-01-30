@@ -94,12 +94,12 @@ serve(async (req) => {
 ## YOUR CLIENT DATA (REAL DATA FROM DATABASE)
 
 ### Portfolio Summary
-- **Total AUM**: ₹${(totalAUM / 10000000).toFixed(2)} Cr (${formatCurrency(totalAUM)})
+- **Total AUM**: ${formatCurrency(totalAUM)}
 - **Total Clients**: ${clients.length}
 - **Active Clients**: ${activeClients}
 
 ### Client List (ordered by assets)
-${clients.map((c, i) => `${i + 1}. **${c.client_name}** - ₹${(Number(c.total_assets) / 10000000).toFixed(2)} Cr
+${clients.map((c, i) => `${i + 1}. **${c.client_name}** - ${formatCurrency(Number(c.total_assets))}
    - Email: ${c.email || 'N/A'}
    - Phone: ${c.phone || 'N/A'}
    - Risk Profile: ${c.risk_profile || 'moderate'}
@@ -107,12 +107,12 @@ ${clients.map((c, i) => `${i + 1}. **${c.client_name}** - ₹${(Number(c.total_a
 
 ${goals && goals.length > 0 ? `
 ### Financial Goals
-${goals.map(g => `- **${g.name}** (${clients.find(c => c.id === g.client_id)?.client_name || 'Unknown'}): Target ₹${formatCurrency(g.target_amount)}, Current ₹${formatCurrency(g.current_amount || 0)} (${Math.round(((g.current_amount || 0) / g.target_amount) * 100)}% complete)`).join('\n')}
+${goals.map(g => `- **${g.name}** (${clients.find(c => c.id === g.client_id)?.client_name || 'Unknown'}): Target ${formatCurrency(g.target_amount)}, Current ${formatCurrency(g.current_amount || 0)} (${Math.round(((g.current_amount || 0) / g.target_amount) * 100)}% complete)`).join('\n')}
 ` : ''}
 
 ${orders && orders.length > 0 ? `
 ### Recent Orders
-${orders.slice(0, 10).map(o => `- ${o.order_type.toUpperCase()} ${o.quantity} ${o.symbol} @ ₹${o.price || 'Market'} - ${o.status} (${clients.find(c => c.id === o.client_id)?.client_name || 'Unknown'})`).join('\n')}
+${orders.slice(0, 10).map(o => `- ${o.order_type.toUpperCase()} ${o.quantity} ${o.symbol} @ $${o.price || 'Market'} - ${o.status} (${clients.find(c => c.id === o.client_id)?.client_name || 'Unknown'})`).join('\n')}
 ` : ''}
 
 When answering questions about "top clients", "best clients", "highest value clients" etc., ALWAYS refer to this actual data above. Sort by total_assets for "top" or "largest" queries.`;
@@ -209,10 +209,12 @@ When answering questions about "top clients", "best clients", "highest value cli
 });
 
 function formatCurrency(amount: number): string {
-  if (amount >= 10000000) {
-    return `${(amount / 10000000).toFixed(2)} Cr`;
-  } else if (amount >= 100000) {
-    return `${(amount / 100000).toFixed(2)} L`;
+  if (amount >= 1000000000) {
+    return `$${(amount / 1000000000).toFixed(2)}B`;
+  } else if (amount >= 1000000) {
+    return `$${(amount / 1000000).toFixed(2)}M`;
+  } else if (amount >= 1000) {
+    return `$${(amount / 1000).toFixed(1)}K`;
   }
-  return amount.toLocaleString('en-IN');
+  return `$${amount.toLocaleString('en-US')}`;
 }
