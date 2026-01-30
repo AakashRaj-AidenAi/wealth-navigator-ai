@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import ReactMarkdown from 'react-markdown';
 import {
   Bot,
@@ -24,9 +25,9 @@ interface Message {
 }
 
 const quickActions = [
-  { label: 'Portfolio Analysis', icon: TrendingUp },
-  { label: 'Risk Assessment', icon: AlertTriangle },
-  { label: 'Investment Ideas', icon: Lightbulb },
+  { label: 'Top Clients', icon: TrendingUp, prompt: 'Show me my top clients by assets under management' },
+  { label: 'Risk Assessment', icon: AlertTriangle, prompt: 'Analyze the risk profile distribution of my clients' },
+  { label: 'Investment Ideas', icon: Lightbulb, prompt: 'Suggest investment strategies for my high-net-worth clients' },
 ];
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/portfolio-copilot`;
@@ -52,13 +53,14 @@ export const AICopilot = () => {
     }
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (messageText?: string) => {
+    const textToSend = messageText || input;
+    if (!textToSend.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: input,
+      content: textToSend,
       timestamp: new Date(),
     };
 
@@ -69,11 +71,14 @@ export const AICopilot = () => {
     let assistantContent = "";
 
     try {
+      // Get current session for auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      
       const resp = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({ 
           messages: [...messages, userMessage].map(m => ({ role: m.role, content: m.content }))
@@ -232,7 +237,7 @@ export const AICopilot = () => {
               variant="outline"
               size="sm"
               className="text-xs h-7 gap-1.5"
-              onClick={() => setInput(`Provide ${action.label.toLowerCase()} for my top clients`)}
+              onClick={() => handleSend(action.prompt)}
               disabled={isLoading}
             >
               <action.icon className="h-3 w-3" />
@@ -254,7 +259,7 @@ export const AICopilot = () => {
             disabled={isLoading}
           />
           <Button
-            onClick={handleSend}
+            onClick={() => handleSend()}
             disabled={!input.trim() || isLoading}
             className="bg-gradient-gold hover:opacity-90"
           >
