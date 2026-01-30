@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { MetricCard } from '@/components/dashboard/MetricCard';
 import { ClientsTable } from '@/components/dashboard/ClientsTable';
@@ -6,10 +7,69 @@ import { PortfolioChart } from '@/components/dashboard/PortfolioChart';
 import { PerformanceChart } from '@/components/dashboard/PerformanceChart';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import { AICopilot } from '@/components/ai/AICopilot';
-import { firmStats, formatCurrency } from '@/data/mockData';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { DollarSign, Users, TrendingUp, Shield, Briefcase, AlertTriangle } from 'lucide-react';
 
+interface DashboardStats {
+  totalAUM: number;
+  totalClients: number;
+  avgClientAUM: number;
+  pendingOrders: number;
+}
+
+const formatCurrency = (amount: number, short = false): string => {
+  if (short) {
+    if (amount >= 10000000) {
+      return `₹${(amount / 10000000).toFixed(2)} Cr`;
+    } else if (amount >= 100000) {
+      return `₹${(amount / 100000).toFixed(2)} L`;
+    }
+  }
+  return `₹${amount.toLocaleString('en-IN')}`;
+};
+
 const Dashboard = () => {
+  const { user } = useAuth();
+  const [stats, setStats] = useState<DashboardStats>({
+    totalAUM: 0,
+    totalClients: 0,
+    avgClientAUM: 0,
+    pendingOrders: 0
+  });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!user) return;
+      
+      // Fetch clients
+      const { data: clients } = await supabase
+        .from('clients')
+        .select('total_assets')
+        .eq('advisor_id', user.id);
+      
+      // Fetch pending orders
+      const { data: orders } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('status', 'pending');
+      
+      if (clients) {
+        const totalAUM = clients.reduce((sum, c) => sum + (Number(c.total_assets) || 0), 0);
+        setStats({
+          totalAUM,
+          totalClients: clients.length,
+          avgClientAUM: clients.length > 0 ? totalAUM / clients.length : 0,
+          pendingOrders: orders?.length || 0
+        });
+      }
+    };
+
+    fetchStats();
+  }, [user]);
+
+  const userName = user?.user_metadata?.full_name || 'Advisor';
+
   return (
     <MainLayout>
       <div className="space-y-6 animate-fade-in">
@@ -18,7 +78,7 @@ const Dashboard = () => {
           <div>
             <h1 className="text-2xl font-semibold">Advisor Dashboard</h1>
             <p className="text-muted-foreground">
-              Welcome back, Priya. Here's your portfolio overview for today.
+              Welcome back, {userName.split(' ')[0]}. Here's your portfolio overview for today.
             </p>
           </div>
           <div className="text-right">
@@ -38,49 +98,26 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
             title="Total AUM"
-            value={formatCurrency(firmStats.totalAUM, true)}
-            change={2.4}
-            changeLabel="vs last month"
+            value={formatCurrency(stats.totalAUM, true)}
+            changeLabel="your portfolio"
             icon={<DollarSign className="h-5 w-5" />}
             variant="highlight"
           />
           <MetricCard
             title="Active Clients"
-            value={firmStats.totalClients.toString()}
-            change={3.2}
-            changeLabel="new this quarter"
+            value={stats.totalClients.toString()}
+            changeLabel="total clients"
             icon={<Users className="h-5 w-5" />}
           />
           <MetricCard
-            title="Firm YTD Return"
-            value={`${firmStats.ytdReturn}%`}
-            change={firmStats.ytdReturn - 10.5}
-            changeLabel="vs benchmark"
-            icon={<TrendingUp className="h-5 w-5" />}
-          />
-          <MetricCard
-            title="Compliance Score"
-            value={`${firmStats.complianceScore}%`}
-            icon={<Shield className="h-5 w-5" />}
-          />
-        </div>
-
-        {/* Secondary Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <MetricCard
             title="Avg Client AUM"
-            value={formatCurrency(firmStats.avgClientAUM, true)}
+            value={formatCurrency(stats.avgClientAUM, true)}
             icon={<Briefcase className="h-5 w-5" />}
           />
           <MetricCard
-            title="Pending Trades"
-            value={firmStats.pendingTrades.toString()}
+            title="Pending Orders"
+            value={stats.pendingOrders.toString()}
             icon={<TrendingUp className="h-5 w-5" />}
-          />
-          <MetricCard
-            title="Active Alerts"
-            value={firmStats.activeAlerts.toString()}
-            icon={<AlertTriangle className="h-5 w-5" />}
           />
         </div>
 
