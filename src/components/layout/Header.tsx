@@ -1,4 +1,4 @@
-import { Bell, Search, ChevronDown } from 'lucide-react';
+import { Bell, Search, ChevronDown, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -13,8 +13,31 @@ import { Badge } from '@/components/ui/badge';
 import { marketData } from '@/data/mockData';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+
+const roleLabels: Record<string, string> = {
+  wealth_advisor: 'Wealth Advisor',
+  compliance_officer: 'Compliance Officer',
+  client: 'Client'
+};
 
 export const Header = () => {
+  const { user, role, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/auth');
+  };
+
+  const userInitials = user?.user_metadata?.full_name
+    ? user.user_metadata.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase()
+    : user?.email?.substring(0, 2).toUpperCase() || 'U';
+
+  const userName = user?.user_metadata?.full_name || user?.email || 'User';
+  const userRole = role ? roleLabels[role] : 'User';
+
   return (
     <header className="h-16 border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-30">
       <div className="flex h-full items-center justify-between px-6">
@@ -108,11 +131,11 @@ export const Header = () => {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="gap-2 pl-2 pr-3">
                 <div className="h-8 w-8 rounded-full bg-gradient-gold flex items-center justify-center">
-                  <span className="text-sm font-semibold text-primary-foreground">PS</span>
+                  <span className="text-sm font-semibold text-primary-foreground">{userInitials}</span>
                 </div>
                 <div className="text-left hidden sm:block">
-                  <p className="text-sm font-medium">Priya Sharma</p>
-                  <p className="text-xs text-muted-foreground">Senior Advisor</p>
+                  <p className="text-sm font-medium">{userName}</p>
+                  <p className="text-xs text-muted-foreground">{userRole}</p>
                 </div>
                 <ChevronDown className="h-4 w-4 text-muted-foreground" />
               </Button>
@@ -120,11 +143,14 @@ export const Header = () => {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Profile Settings</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/settings')}>Profile Settings</DropdownMenuItem>
               <DropdownMenuItem>Team Management</DropdownMenuItem>
               <DropdownMenuItem>Preferences</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">Sign Out</DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive" onClick={handleSignOut}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
