@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Shield, AlertTriangle, CheckCircle2, Clock, FileCheck, Eye } from 'lucide-react';
+import { GenerateReportModal } from '@/components/modals/GenerateReportModal';
+import { useAuth } from '@/contexts/AuthContext';
 
 const complianceItems = [
   { id: 1, title: 'KYC Document Expiry - Harrison Trust', type: 'Document', priority: 'high', dueDate: 'Feb 5, 2025', status: 'pending' },
@@ -12,6 +15,11 @@ const complianceItems = [
 ];
 
 const Compliance = () => {
+  const { role } = useAuth();
+  const [generateReportOpen, setGenerateReportOpen] = useState(false);
+
+  const canGenerateReport = role === 'compliance_officer' || role === 'wealth_advisor';
+
   return (
     <MainLayout>
       <div className="space-y-6 animate-fade-in">
@@ -23,10 +31,15 @@ const Compliance = () => {
               Monitor regulatory compliance, alerts, and audit requirements
             </p>
           </div>
-          <Button className="bg-gradient-gold hover:opacity-90 gap-2">
-            <FileCheck className="h-4 w-4" />
-            Generate Report
-          </Button>
+          {canGenerateReport && (
+            <Button 
+              className="bg-gradient-gold hover:opacity-90 gap-2"
+              onClick={() => setGenerateReportOpen(true)}
+            >
+              <FileCheck className="h-4 w-4" />
+              Generate Report
+            </Button>
+          )}
         </div>
 
         {/* Compliance Score */}
@@ -120,6 +133,12 @@ const Compliance = () => {
           </div>
         </div>
       </div>
+
+      <GenerateReportModal 
+        open={generateReportOpen} 
+        onOpenChange={setGenerateReportOpen}
+        defaultType="compliance"
+      />
     </MainLayout>
   );
 };
