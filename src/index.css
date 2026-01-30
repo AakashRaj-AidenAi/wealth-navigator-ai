@@ -3,8 +3,76 @@
 @tailwind utilities;
 
 @layer base {
+  /* Light Theme - Clean Professional Banking */
   :root {
-    /* Wealth Management Premium Dark Theme */
+    --background: 0 0% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Gold accent - wealth & prestige */
+    --primary: 43 74% 42%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 220 14% 94%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 220 14% 92%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Success - gains */
+    --success: 160 84% 32%;
+    --success-foreground: 0 0% 100%;
+
+    /* Warning - alerts */
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 47% 11%;
+
+    --border: 220 13% 87%;
+    --input: 220 14% 92%;
+    --ring: 43 74% 42%;
+
+    --radius: 0.75rem;
+
+    /* Sidebar - slightly different for contrast */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 43 74% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 95%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 43 74% 42%;
+
+    /* Chart colors */
+    --chart-1: 43 74% 49%;
+    --chart-2: 160 84% 39%;
+    --chart-3: 199 89% 48%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+
+    /* Custom gradients */
+    --gradient-gold: linear-gradient(135deg, hsl(43 74% 42%), hsl(38 92% 45%));
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%), hsl(220 14% 98%));
+    --gradient-hero: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 14% 96%) 100%);
+
+    /* Shadows */
+    --shadow-card: 0 4px 24px -4px rgba(0, 0, 0, 0.08);
+    --shadow-glow: 0 0 40px -10px hsl(43 74% 42% / 0.2);
+  }
+
+  /* Dark Theme - Premium Institutional */
+  .dark {
     --background: 222 47% 6%;
     --foreground: 210 40% 96%;
 
@@ -42,8 +110,6 @@
     --input: 222 30% 14%;
     --ring: 43 74% 49%;
 
-    --radius: 0.75rem;
-
     /* Sidebar - slightly lighter for contrast */
     --sidebar-background: 222 47% 7%;
     --sidebar-foreground: 210 40% 90%;
@@ -69,11 +135,6 @@
     /* Shadows */
     --shadow-card: 0 4px 24px -4px rgba(0, 0, 0, 0.4);
     --shadow-glow: 0 0 40px -10px hsl(43 74% 49% / 0.3);
-  }
-
-  .dark {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 96%;
   }
 }
 
