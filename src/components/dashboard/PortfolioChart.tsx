@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { assetAllocation, formatCurrency } from '@/data/mockData';
+import { supabase } from '@/integrations/supabase/client';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const COLORS = [
   'hsl(43, 74%, 49%)',
@@ -10,14 +12,75 @@ const COLORS = [
   'hsl(38, 92%, 50%)',
 ];
 
+interface AllocationData {
+  name: string;
+  value: number;
+}
+
+const formatCurrency = (amount: number): string => {
+  if (amount >= 10000000) {
+    return `₹${(amount / 10000000).toFixed(2)} Cr`;
+  } else if (amount >= 100000) {
+    return `₹${(amount / 100000).toFixed(2)} L`;
+  }
+  return `₹${amount.toLocaleString('en-IN')}`;
+};
+
 export const PortfolioChart = () => {
-  const totalAUM = 547000000;
+  const [allocation, setAllocation] = useState<AllocationData[]>([]);
+  const [totalAUM, setTotalAUM] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const { data: clients } = await supabase
+        .from('clients')
+        .select('risk_profile, total_assets');
+
+      if (clients && clients.length > 0) {
+        const total = clients.reduce((sum, c) => sum + (Number(c.total_assets) || 0), 0);
+        setTotalAUM(total);
+
+        // Group by risk profile
+        const riskGroups = clients.reduce((acc, client) => {
+          const risk = client.risk_profile || 'moderate';
+          acc[risk] = (acc[risk] || 0) + (Number(client.total_assets) || 0);
+          return acc;
+        }, {} as Record<string, number>);
+
+        const allocationData = Object.entries(riskGroups).map(([name, value]) => ({
+          name: name.charAt(0).toUpperCase() + name.slice(1),
+          value: Math.round((value / total) * 100)
+        }));
+
+        setAllocation(allocationData);
+      } else {
+        // Default empty state
+        setAllocation([
+          { name: 'No Data', value: 100 }
+        ]);
+      }
+      setLoading(false);
+    };
+
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="glass rounded-xl p-5 h-full">
+        <Skeleton className="h-6 w-32 mb-2" />
+        <Skeleton className="h-4 w-48 mb-4" />
+        <Skeleton className="h-48 w-48 rounded-full mx-auto" />
+      </div>
+    );
+  }
 
   return (
     <div className="glass rounded-xl p-5 h-full">
       <div className="mb-4">
-        <h3 className="font-semibold">Asset Allocation</h3>
-        <p className="text-sm text-muted-foreground">Firm-wide portfolio breakdown</p>
+        <h3 className="font-semibold">Risk Profile Distribution</h3>
+        <p className="text-sm text-muted-foreground">Client assets by risk tolerance</p>
       </div>
       
       <div className="flex items-center gap-6">
@@ -25,7 +88,7 @@ export const PortfolioChart = () => {
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={assetAllocation}
+                data={allocation}
                 cx="50%"
                 cy="50%"
                 innerRadius={55}
@@ -33,7 +96,7 @@ export const PortfolioChart = () => {
                 paddingAngle={2}
                 dataKey="value"
               >
-                {assetAllocation.map((entry, index) => (
+                {allocation.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
@@ -54,17 +117,17 @@ export const PortfolioChart = () => {
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-xs text-muted-foreground">Total AUM</span>
-            <span className="text-lg font-semibold">{formatCurrency(totalAUM, true)}</span>
+            <span className="text-lg font-semibold">{formatCurrency(totalAUM)}</span>
           </div>
         </div>
 
         <div className="flex-1 space-y-2">
-          {assetAllocation.map((item, index) => (
+          {allocation.map((item, index) => (
             <div key={item.name} className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div
                   className="h-3 w-3 rounded-sm"
-                  style={{ backgroundColor: COLORS[index] }}
+                  style={{ backgroundColor: COLORS[index % COLORS.length] }}
                 />
                 <span className="text-sm text-muted-foreground">{item.name}</span>
               </div>

@@ -10,7 +10,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
-import { marketData } from '@/data/mockData';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,6 +20,14 @@ const roleLabels: Record<string, string> = {
   compliance_officer: 'Compliance Officer',
   client: 'Client'
 };
+
+// Static market data (could be replaced with real API later)
+const marketTicker = [
+  { symbol: 'NIFTY', price: 22456.80, changePercent: 0.45 },
+  { symbol: 'SENSEX', price: 73852.94, changePercent: 0.38 },
+  { symbol: 'GOLD', price: 62450.00, changePercent: -0.12 },
+  { symbol: 'USD/INR', price: 83.12, changePercent: 0.05 },
+];
 
 export const Header = () => {
   const { user, role, signOut } = useAuth();
@@ -43,7 +50,7 @@ export const Header = () => {
       <div className="flex h-full items-center justify-between px-6">
         {/* Market Ticker */}
         <div className="flex items-center gap-6">
-          {marketData.slice(0, 4).map((item) => (
+          {marketTicker.map((item) => (
             <div key={item.symbol} className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">{item.symbol}</span>
               <span className="text-sm font-medium tabular-nums">{item.price.toLocaleString()}</span>
@@ -86,37 +93,37 @@ export const Header = () => {
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="h-5 w-5" />
                 <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground flex items-center justify-center">
-                  5
+                  3
                 </span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-80">
               <DropdownMenuLabel className="flex items-center justify-between">
                 <span>Notifications</span>
-                <Badge variant="secondary" className="text-xs">5 new</Badge>
+                <Badge variant="secondary" className="text-xs">3 new</Badge>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <div className="max-h-64 overflow-auto">
                 <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-destructive" />
-                    <span className="text-sm font-medium">Concentration Limit Breach</span>
+                    <span className="text-sm font-medium">Pending Orders</span>
                   </div>
-                  <span className="text-xs text-muted-foreground">Nakamura Estate - 2 min ago</span>
+                  <span className="text-xs text-muted-foreground">Review pending orders - Just now</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-warning" />
-                    <span className="text-sm font-medium">KYC Documents Expiring</span>
+                    <span className="text-sm font-medium">Portfolio Review Due</span>
                   </div>
-                  <span className="text-xs text-muted-foreground">Meridian Capital - 1 hour ago</span>
+                  <span className="text-xs text-muted-foreground">Quarterly review reminder - 1 hour ago</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-success" />
-                    <span className="text-sm font-medium">Trade Executed</span>
+                    <span className="text-sm font-medium">New Client Added</span>
                   </div>
-                  <span className="text-xs text-muted-foreground">Raghavan Family - 30 min ago</span>
+                  <span className="text-xs text-muted-foreground">Successfully onboarded - Today</span>
                 </DropdownMenuItem>
               </div>
               <DropdownMenuSeparator />
