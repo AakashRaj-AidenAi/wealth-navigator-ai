@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
+import { formatCurrency } from '@/lib/currency';
 
 const COLORS = [
   'hsl(43, 74%, 49%)',
@@ -16,15 +17,6 @@ interface AllocationData {
   name: string;
   value: number;
 }
-
-const formatCurrency = (amount: number): string => {
-  if (amount >= 10000000) {
-    return `₹${(amount / 10000000).toFixed(2)} Cr`;
-  } else if (amount >= 100000) {
-    return `₹${(amount / 100000).toFixed(2)} L`;
-  }
-  return `₹${amount.toLocaleString('en-IN')}`;
-};
 
 export const PortfolioChart = () => {
   const [allocation, setAllocation] = useState<AllocationData[]>([]);
@@ -117,7 +109,7 @@ export const PortfolioChart = () => {
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-xs text-muted-foreground">Total AUM</span>
-            <span className="text-lg font-semibold">{formatCurrency(totalAUM)}</span>
+            <span className="text-lg font-semibold">{formatCurrency(totalAUM, true)}</span>
           </div>
         </div>
 

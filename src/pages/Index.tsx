@@ -9,6 +9,7 @@ import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import { AICopilot } from '@/components/ai/AICopilot';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatCurrency } from '@/lib/currency';
 import { DollarSign, Users, TrendingUp, Shield, Briefcase, AlertTriangle } from 'lucide-react';
 
 interface DashboardStats {
@@ -17,17 +18,6 @@ interface DashboardStats {
   avgClientAUM: number;
   pendingOrders: number;
 }
-
-const formatCurrency = (amount: number, short = false): string => {
-  if (short) {
-    if (amount >= 10000000) {
-      return `₹${(amount / 10000000).toFixed(2)} Cr`;
-    } else if (amount >= 100000) {
-      return `₹${(amount / 100000).toFixed(2)} L`;
-    }
-  }
-  return `₹${amount.toLocaleString('en-IN')}`;
-};
 
 const Dashboard = () => {
   const { user } = useAuth();
