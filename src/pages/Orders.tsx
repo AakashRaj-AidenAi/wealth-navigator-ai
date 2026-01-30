@@ -11,11 +11,22 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Search, Filter, Clock, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Plus, Search, Filter, Clock, CheckCircle2, XCircle, Check, X } from 'lucide-react';
 import { NewOrderModal } from '@/components/modals/NewOrderModal';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Order {
   id: string;
@@ -40,10 +51,18 @@ const statusConfig: Record<string, { icon: React.ElementType; color: string; lab
 
 const Orders = () => {
   const { role } = useAuth();
+  const { toast } = useToast();
   const [newOrderOpen, setNewOrderOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    orderId: string;
+    action: 'execute' | 'cancel';
+    symbol: string;
+  } | null>(null);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -66,6 +85,37 @@ const Orders = () => {
   }, []);
 
   const canCreateOrder = role === 'wealth_advisor';
+  const canApproveOrders = role === 'compliance_officer';
+
+  const handleOrderAction = async (orderId: string, action: 'execute' | 'cancel') => {
+    setActionLoading(orderId);
+    
+    const updateData = action === 'execute' 
+      ? { status: 'executed' as const, executed_at: new Date().toISOString() }
+      : { status: 'cancelled' as const };
+
+    const { error } = await supabase
+      .from('orders')
+      .update(updateData)
+      .eq('id', orderId);
+
+    if (error) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive'
+      });
+    } else {
+      toast({
+        title: action === 'execute' ? 'Order Executed' : 'Order Cancelled',
+        description: `Order has been ${action === 'execute' ? 'executed' : 'cancelled'} successfully.`
+      });
+      fetchOrders();
+    }
+    
+    setActionLoading(null);
+    setConfirmDialog(null);
+  };
 
   const filteredOrders = orders.filter(order => 
     order.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -172,16 +222,20 @@ const Orders = () => {
                   <TableHead className="text-xs font-medium text-muted-foreground text-right">Price</TableHead>
                   <TableHead className="text-xs font-medium text-muted-foreground">Status</TableHead>
                   <TableHead className="text-xs font-medium text-muted-foreground">Date</TableHead>
+                  {canApproveOrders && (
+                    <TableHead className="text-xs font-medium text-muted-foreground text-center">Actions</TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredOrders.map((order) => {
                   const status = statusConfig[order.status];
                   const StatusIcon = status.icon;
+                  const isPending = order.status === 'pending';
                   return (
                     <TableRow
                       key={order.id}
-                      className="hover:bg-muted/20 transition-colors cursor-pointer border-border"
+                      className="hover:bg-muted/20 transition-colors border-border"
                     >
                       <TableCell className="font-mono text-sm">{order.id.slice(0, 8)}</TableCell>
                       <TableCell>{order.clients?.client_name || 'Unknown'}</TableCell>
@@ -204,6 +258,44 @@ const Orders = () => {
                       <TableCell className="text-muted-foreground">
                         {new Date(order.created_at).toLocaleDateString()}
                       </TableCell>
+                      {canApproveOrders && (
+                        <TableCell className="text-center">
+                          {isPending ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 p-0 text-success hover:text-success hover:bg-success/20"
+                                onClick={() => setConfirmDialog({ 
+                                  open: true, 
+                                  orderId: order.id, 
+                                  action: 'execute',
+                                  symbol: order.symbol 
+                                })}
+                                disabled={actionLoading === order.id}
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/20"
+                                onClick={() => setConfirmDialog({ 
+                                  open: true, 
+                                  orderId: order.id, 
+                                  action: 'cancel',
+                                  symbol: order.symbol 
+                                })}
+                                disabled={actionLoading === order.id}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })}
@@ -218,6 +310,31 @@ const Orders = () => {
         onOpenChange={setNewOrderOpen}
         onSuccess={fetchOrders}
       />
+
+      <AlertDialog open={confirmDialog?.open} onOpenChange={(open) => !open && setConfirmDialog(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmDialog?.action === 'execute' ? 'Execute Order' : 'Cancel Order'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDialog?.action === 'execute' 
+                ? `Are you sure you want to execute the order for ${confirmDialog?.symbol}? This action cannot be undone.`
+                : `Are you sure you want to cancel the order for ${confirmDialog?.symbol}? This action cannot be undone.`
+              }
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={confirmDialog?.action === 'execute' ? 'bg-success hover:bg-success/90' : 'bg-destructive hover:bg-destructive/90'}
+              onClick={() => confirmDialog && handleOrderAction(confirmDialog.orderId, confirmDialog.action)}
+            >
+              {confirmDialog?.action === 'execute' ? 'Execute' : 'Reject'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </MainLayout>
   );
 };
