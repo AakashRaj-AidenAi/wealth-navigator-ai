@@ -32,7 +32,11 @@ const quickActions = [
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/portfolio-copilot`;
 
-export const AICopilot = () => {
+interface AICopilotProps {
+  defaultMinimized?: boolean;
+}
+
+export const AICopilot = ({ defaultMinimized = false }: AICopilotProps) => {
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -43,6 +47,7 @@ export const AICopilot = () => {
     }
   ]);
   const [input, setInput] = useState('');
+  const [isMinimized, setIsMinimized] = useState(defaultMinimized);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -146,10 +151,22 @@ export const AICopilot = () => {
     }
   };
 
+  // Minimized state - just show a floating button
+  if (isMinimized) {
+    return (
+      <Button
+        onClick={() => setIsMinimized(false)}
+        className="h-14 w-14 rounded-full bg-gradient-gold hover:opacity-90 shadow-lg"
+      >
+        <Bot className="h-6 w-6" />
+      </Button>
+    );
+  }
+
   return (
     <div
       className={cn(
-        'glass rounded-xl flex flex-col transition-all duration-300',
+        'glass rounded-xl flex flex-col transition-all duration-300 w-[380px] shadow-xl',
         isExpanded ? 'h-[600px]' : 'h-[400px]'
       )}
     >
@@ -167,18 +184,29 @@ export const AICopilot = () => {
             <p className="text-xs text-muted-foreground">Powered by WealthOS AI</p>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="h-8 w-8"
-        >
-          {isExpanded ? (
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="h-8 w-8"
+          >
+            {isExpanded ? (
+              <Minimize2 className="h-4 w-4" />
+            ) : (
+              <Maximize2 className="h-4 w-4" />
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsMinimized(true)}
+            className="h-8 w-8"
+            title="Minimize"
+          >
             <Minimize2 className="h-4 w-4" />
-          ) : (
-            <Maximize2 className="h-4 w-4" />
-          )}
-        </Button>
+          </Button>
+        </div>
       </div>
 
       {/* Messages */}

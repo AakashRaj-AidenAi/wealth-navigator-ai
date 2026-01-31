@@ -256,9 +256,9 @@ const Dashboard = () => {
           <ActivityFeed />
         </div>
 
-        {/* AI Copilot - Floating */}
+        {/* AI Copilot - Floating Minimized */}
         <div className="fixed bottom-6 right-6 z-50">
-          <AICopilot />
+          <AICopilot defaultMinimized={true} />
         </div>
       </div>
     </MainLayout>
