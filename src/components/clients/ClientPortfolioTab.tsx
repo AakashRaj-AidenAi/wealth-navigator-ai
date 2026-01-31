@@ -1,158 +1,278 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { TrendingUp, TrendingDown, PieChart, BarChart3, Wallet } from 'lucide-react';
-import { formatCurrency } from '@/lib/currency';
+import { useEffect, useState, useMemo } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { Skeleton } from '@/components/ui/skeleton';
+import { PortfolioMetrics } from '@/components/portfolio/PortfolioMetrics';
+import { AssetAllocationChart, AllocationItem } from '@/components/portfolio/AssetAllocationChart';
+import { PerformanceLineChart, PerformanceDataPoint } from '@/components/portfolio/PerformanceLineChart';
+import { GoalProgressCard, Goal } from '@/components/portfolio/GoalProgressCard';
+import { PortfolioAlerts, PortfolioAlert } from '@/components/portfolio/PortfolioAlerts';
+import { HoldingsTable, Holding } from '@/components/portfolio/HoldingsTable';
 
 interface ClientPortfolioTabProps {
   clientId: string;
   totalAssets: number;
 }
 
-// Mock portfolio data - in production this would come from the database
-const mockPortfolio = {
-  allocations: [
-    { name: 'Equity', percentage: 45, value: 0, color: 'bg-chart-1' },
-    { name: 'Fixed Income', percentage: 30, value: 0, color: 'bg-chart-2' },
-    { name: 'Real Estate', percentage: 15, value: 0, color: 'bg-chart-3' },
-    { name: 'Cash & Alternatives', percentage: 10, value: 0, color: 'bg-chart-4' },
-  ],
-  performance: {
-    ytd: 12.5,
-    oneYear: 18.3,
-    threeYear: 42.1,
-    fiveYear: 85.6
-  },
-  holdings: [
-    { name: 'HDFC Bank Ltd', type: 'Equity', value: 1250000, change: 5.2 },
-    { name: 'Reliance Industries', type: 'Equity', value: 980000, change: -2.1 },
-    { name: 'ICICI Prudential MF', type: 'Mutual Fund', value: 750000, change: 3.8 },
-    { name: 'Government Bonds 2028', type: 'Fixed Income', value: 500000, change: 0.5 },
-    { name: 'Gold ETF', type: 'Commodity', value: 320000, change: 1.2 },
-  ]
+// Helper to calculate XIRR (simplified approximation)
+const calculateXIRR = (cashFlows: { amount: number; date: Date }[]): number => {
+  if (cashFlows.length < 2) return 0;
+  
+  // Simplified XIRR using Newton-Raphson approximation
+  const guess = 0.1;
+  let rate = guess;
+  
+  for (let i = 0; i < 100; i++) {
+    let npv = 0;
+    let dnpv = 0;
+    const firstDate = cashFlows[0].date;
+    
+    for (const cf of cashFlows) {
+      const years = (cf.date.getTime() - firstDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+      npv += cf.amount / Math.pow(1 + rate, years);
+      dnpv -= years * cf.amount / Math.pow(1 + rate, years + 1);
+    }
+    
+    const newRate = rate - npv / dnpv;
+    if (Math.abs(newRate - rate) < 0.0001) {
+      return newRate * 100;
+    }
+    rate = newRate;
+  }
+  
+  return rate * 100;
+};
+
+// Helper to calculate CAGR
+const calculateCAGR = (startValue: number, endValue: number, years: number): number => {
+  if (startValue <= 0 || years <= 0) return 0;
+  return (Math.pow(endValue / startValue, 1 / years) - 1) * 100;
+};
+
+// Generate simulated historical performance data
+const generatePerformanceData = (currentValue: number): PerformanceDataPoint[] => {
+  const data: PerformanceDataPoint[] = [];
+  const now = new Date();
+  
+  for (let i = 24; i >= 0; i--) {
+    const date = new Date(now);
+    date.setMonth(date.getMonth() - i);
+    
+    // Simulate growth with some volatility
+    const progress = (24 - i) / 24;
+    const baseValue = currentValue * 0.7; // Started at 70% of current
+    const growthFactor = 1 + (0.3 * progress); // 30% growth over period
+    const volatility = 1 + (Math.random() - 0.5) * 0.1; // ±5% volatility
+    
+    data.push({
+      date: date.toISOString().split('T')[0],
+      value: Math.round(baseValue * growthFactor * volatility),
+    });
+  }
+  
+  // Ensure last value matches current
+  if (data.length > 0) {
+    data[data.length - 1].value = currentValue;
+  }
+  
+  return data;
+};
+
+// Generate alerts based on portfolio state
+const generateAlerts = (
+  allocations: AllocationItem[],
+  goals: Goal[],
+  holdings: Holding[]
+): PortfolioAlert[] => {
+  const alerts: PortfolioAlert[] = [];
+  
+  // Check allocation drift
+  allocations.forEach(alloc => {
+    if (alloc.targetPercentage) {
+      const drift = Math.abs(alloc.percentage - alloc.targetPercentage);
+      if (drift > 10) {
+        alerts.push({
+          id: `drift-${alloc.name}`,
+          type: 'allocation_drift',
+          severity: drift > 15 ? 'critical' : 'warning',
+          title: `${alloc.name} allocation drift`,
+          description: `${alloc.name} is ${drift.toFixed(1)}% off target allocation`,
+          value: `Current: ${alloc.percentage.toFixed(1)}% | Target: ${alloc.targetPercentage}%`,
+          action: 'Rebalance Portfolio',
+          timestamp: new Date(),
+        });
+      }
+    }
+  });
+  
+  // Check for significant losses in holdings
+  holdings.forEach(holding => {
+    if (holding.gainLossPercent < -10) {
+      alerts.push({
+        id: `drop-${holding.id}`,
+        type: 'price_drop',
+        severity: holding.gainLossPercent < -20 ? 'critical' : 'warning',
+        title: `${holding.symbol} price drop`,
+        description: `${holding.name} is down ${Math.abs(holding.gainLossPercent).toFixed(1)}% from average cost`,
+        action: 'Review Position',
+        timestamp: new Date(),
+      });
+    }
+  });
+  
+  // Check goal shortfalls
+  goals.forEach(goal => {
+    const progress = (goal.currentAmount / goal.targetAmount) * 100;
+    if (goal.targetDate) {
+      const monthsLeft = Math.max(0, 
+        (new Date(goal.targetDate).getTime() - Date.now()) / (30 * 24 * 60 * 60 * 1000)
+      );
+      const expectedProgress = 100 - (monthsLeft / 60) * 100; // Assume 5 year goals
+      
+      if (progress < expectedProgress - 15) {
+        alerts.push({
+          id: `goal-${goal.id}`,
+          type: 'goal_shortfall',
+          severity: progress < expectedProgress - 25 ? 'critical' : 'warning',
+          title: `${goal.name} behind schedule`,
+          description: `Goal is ${(expectedProgress - progress).toFixed(0)}% behind expected progress`,
+          action: 'Increase Contributions',
+          timestamp: new Date(),
+        });
+      }
+    }
+  });
+  
+  return alerts;
 };
 
 export const ClientPortfolioTab = ({ clientId, totalAssets }: ClientPortfolioTabProps) => {
-  const allocations = mockPortfolio.allocations.map(a => ({
-    ...a,
-    value: (a.percentage / 100) * totalAssets
-  }));
+  const [loading, setLoading] = useState(true);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [assetFilter, setAssetFilter] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const [goalsResult, ordersResult] = await Promise.all([
+        supabase.from('goals').select('*').eq('client_id', clientId),
+        supabase.from('orders').select('*').eq('client_id', clientId).order('created_at', { ascending: true }),
+      ]);
+
+      if (goalsResult.data) {
+        setGoals(goalsResult.data.map(g => ({
+          id: g.id,
+          name: g.name,
+          targetAmount: g.target_amount,
+          currentAmount: g.current_amount || 0,
+          targetDate: g.target_date,
+          status: g.status || 'active',
+          priority: g.priority || 'medium',
+        })));
+      }
+
+      if (ordersResult.data) {
+        setOrders(ordersResult.data);
+      }
+
+      setLoading(false);
+    };
+
+    fetchData();
+  }, [clientId]);
+
+  // Calculate portfolio metrics
+  const metrics = useMemo(() => {
+    // Simulate invested value (80% of current for demo)
+    const investedValue = totalAssets * 0.8;
+    
+    // Calculate XIRR from orders
+    const cashFlows = orders.map(o => ({
+      amount: o.order_type === 'buy' ? -(o.total_amount || o.quantity * (o.price || 0)) : (o.total_amount || o.quantity * (o.price || 0)),
+      date: new Date(o.created_at),
+    }));
+    // Add current value as final cash flow
+    cashFlows.push({ amount: totalAssets, date: new Date() });
+    
+    const xirr = cashFlows.length > 1 ? calculateXIRR(cashFlows) : 15.5; // Fallback
+    const cagr = calculateCAGR(investedValue, totalAssets, 2); // Assume 2 year history
+    
+    return { investedValue, xirr, cagr };
+  }, [totalAssets, orders]);
+
+  // Asset allocation data
+  const allocations: AllocationItem[] = useMemo(() => [
+    { name: 'Equity', value: totalAssets * 0.45, percentage: 45, targetPercentage: 50 },
+    { name: 'Fixed Income', value: totalAssets * 0.30, percentage: 30, targetPercentage: 30 },
+    { name: 'Real Estate', value: totalAssets * 0.15, percentage: 15, targetPercentage: 12 },
+    { name: 'Cash', value: totalAssets * 0.10, percentage: 10, targetPercentage: 8 },
+  ], [totalAssets]);
+
+  // Holdings data (simulated based on allocation)
+  const holdings: Holding[] = useMemo(() => [
+    { id: '1', name: 'Apple Inc.', symbol: 'AAPL', assetClass: 'Equity', quantity: 150, avgCost: 145.50, currentPrice: 178.25, value: 26737.50, gainLoss: 4912.50, gainLossPercent: 22.5 },
+    { id: '2', name: 'Microsoft Corp', symbol: 'MSFT', assetClass: 'Equity', quantity: 80, avgCost: 320.00, currentPrice: 378.50, value: 30280.00, gainLoss: 4680.00, gainLossPercent: 18.3 },
+    { id: '3', name: 'Tesla Inc.', symbol: 'TSLA', assetClass: 'Equity', quantity: 45, avgCost: 280.00, currentPrice: 245.00, value: 11025.00, gainLoss: -1575.00, gainLossPercent: -12.5 },
+    { id: '4', name: 'Vanguard Bond ETF', symbol: 'BND', assetClass: 'Fixed Income', quantity: 500, avgCost: 72.50, currentPrice: 74.25, value: 37125.00, gainLoss: 875.00, gainLossPercent: 2.4 },
+    { id: '5', name: 'iShares TIPS ETF', symbol: 'TIP', assetClass: 'Fixed Income', quantity: 300, avgCost: 108.00, currentPrice: 110.50, value: 33150.00, gainLoss: 750.00, gainLossPercent: 2.3 },
+    { id: '6', name: 'Vanguard REIT ETF', symbol: 'VNQ', assetClass: 'Real Estate', quantity: 200, avgCost: 85.00, currentPrice: 92.50, value: 18500.00, gainLoss: 1500.00, gainLossPercent: 8.8 },
+    { id: '7', name: 'SPDR Gold Trust', symbol: 'GLD', assetClass: 'Commodity', quantity: 50, avgCost: 175.00, currentPrice: 182.00, value: 9100.00, gainLoss: 350.00, gainLossPercent: 4.0 },
+    { id: '8', name: 'Money Market Fund', symbol: 'CASH', assetClass: 'Cash', quantity: 15000, avgCost: 1.00, currentPrice: 1.00, value: 15000.00, gainLoss: 0, gainLossPercent: 0 },
+  ], []);
+
+  // Performance data
+  const performanceData = useMemo(() => generatePerformanceData(totalAssets), [totalAssets]);
+
+  // Alerts
+  const alerts = useMemo(() => generateAlerts(allocations, goals, holdings), [allocations, goals, holdings]);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24" />)}
+        </div>
+        <div className="grid grid-cols-2 gap-6">
+          <Skeleton className="h-64" />
+          <Skeleton className="h-64" />
+        </div>
+        <Skeleton className="h-96" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Portfolio Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="glass">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Portfolio</p>
-                <p className="text-2xl font-semibold">{formatCurrency(totalAssets, true)}</p>
-              </div>
-              <Wallet className="h-8 w-8 text-primary opacity-50" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="glass">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">YTD Return</p>
-                <p className="text-2xl font-semibold text-success">+{mockPortfolio.performance.ytd}%</p>
-              </div>
-              <TrendingUp className="h-8 w-8 text-success opacity-50" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="glass">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">1Y Return</p>
-                <p className="text-2xl font-semibold text-success">+{mockPortfolio.performance.oneYear}%</p>
-              </div>
-              <BarChart3 className="h-8 w-8 text-primary opacity-50" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="glass">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">3Y Return</p>
-                <p className="text-2xl font-semibold text-success">+{mockPortfolio.performance.threeYear}%</p>
-              </div>
-              <TrendingUp className="h-8 w-8 text-success opacity-50" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Key Metrics */}
+      <PortfolioMetrics
+        currentValue={totalAssets}
+        investedValue={metrics.investedValue}
+        xirr={metrics.xirr}
+        cagr={metrics.cagr}
+      />
 
+      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Asset Allocation */}
-        <Card className="glass">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <PieChart className="h-5 w-5 text-primary" />
-              Asset Allocation
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {allocations.map((allocation) => (
-              <div key={allocation.name} className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">{allocation.name}</span>
-                  <span className="text-muted-foreground">
-                    {allocation.percentage}% • {formatCurrency(allocation.value, true)}
-                  </span>
-                </div>
-                <Progress value={allocation.percentage} className="h-2" />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Top Holdings */}
-        <Card className="glass">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-primary" />
-              Top Holdings
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {mockPortfolio.holdings.map((holding, index) => (
-                <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
-                  <div>
-                    <p className="font-medium text-sm">{holding.name}</p>
-                    <Badge variant="outline" className="text-xs mt-1">{holding.type}</Badge>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium tabular-nums">{formatCurrency(holding.value)}</p>
-                    <p className={`text-xs flex items-center justify-end gap-1 ${holding.change >= 0 ? 'text-success' : 'text-destructive'}`}>
-                      {holding.change >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                      {holding.change >= 0 ? '+' : ''}{holding.change}%
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <AssetAllocationChart
+          allocations={allocations}
+          totalValue={totalAssets}
+          selectedFilter={assetFilter}
+          onFilterChange={setAssetFilter}
+        />
+        <PerformanceLineChart data={performanceData} />
       </div>
 
-      {/* Placeholder for real portfolio integration */}
-      <Card className="glass border-dashed">
-        <CardContent className="py-8 text-center">
-          <PieChart className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h3 className="font-semibold mb-2">Portfolio Integration</h3>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            Connect to your portfolio management system to display real-time holdings, 
-            transactions, and performance analytics.
-          </p>
-        </CardContent>
-      </Card>
+      {/* Goals and Alerts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <GoalProgressCard goals={goals} />
+        <PortfolioAlerts 
+          alerts={alerts}
+          onDismiss={(id) => console.log('Dismiss:', id)}
+          onAction={(alert) => console.log('Action:', alert)}
+        />
+      </div>
+
+      {/* Holdings Table */}
+      <HoldingsTable holdings={holdings} assetClassFilter={assetFilter} />
     </div>
   );
 };
