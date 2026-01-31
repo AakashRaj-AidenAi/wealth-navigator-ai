@@ -11,7 +11,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Search, Filter, Clock, CheckCircle2, XCircle, Check, X } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, Search, Filter, Clock, CheckCircle2, XCircle, Check, X, TrendingUp } from 'lucide-react';
 import { NewOrderModal } from '@/components/modals/NewOrderModal';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -40,6 +41,10 @@ interface Order {
   notes: string | null;
   created_at: string;
   executed_at: string | null;
+  execution_type: 'market' | 'limit' | 'fill_or_kill' | 'good_till_cancel' | null;
+  limit_price: number | null;
+  execution_price: number | null;
+  expires_at: string | null;
   clients?: { client_name: string } | null;
 }
 
@@ -49,6 +54,13 @@ const statusConfig: Record<string, { icon: React.ElementType; color: string; lab
   cancelled: { icon: XCircle, color: 'bg-destructive/20 text-destructive', label: 'Cancelled' },
 };
 
+const executionTypeLabels: Record<string, string> = {
+  market: 'Market',
+  limit: 'Limit',
+  fill_or_kill: 'Fill or Kill',
+  good_till_cancel: 'Good Till Cancel',
+};
+
 const Orders = () => {
   const { role } = useAuth();
   const { toast } = useToast();
@@ -56,6 +68,7 @@ const Orders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
@@ -122,12 +135,16 @@ const Orders = () => {
     order.clients?.client_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const executedOrders = filteredOrders.filter(o => o.status === 'executed');
+  const displayedOrders = activeTab === 'executions' ? executedOrders : filteredOrders;
+
   const pendingOrders = orders.filter(o => o.status === 'pending').length;
   const executedToday = orders.filter(o => 
     o.status === 'executed' && 
     new Date(o.created_at).toDateString() === new Date().toDateString()
   ).length;
   const totalVolume = orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+  const totalExecutedVolume = executedOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
 
   return (
     <MainLayout>
@@ -168,141 +185,53 @@ const Orders = () => {
             </p>
           </div>
           <div className="glass rounded-xl p-5">
-            <p className="text-sm text-muted-foreground">Total Orders</p>
-            <p className="text-2xl font-semibold mt-1">{orders.length}</p>
+            <p className="text-sm text-muted-foreground">Executed Volume</p>
+            <p className="text-2xl font-semibold mt-1 text-success">
+              {formatCurrency(totalExecutedVolume, true)}
+            </p>
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="glass rounded-xl p-4">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="relative flex-1 min-w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search orders..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 bg-secondary/50"
-              />
-            </div>
-            <Button variant="outline" className="gap-2">
-              <Filter className="h-4 w-4" />
-              Filter
-            </Button>
-          </div>
-        </div>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="all" className="gap-2">
+              <Clock className="h-4 w-4" />
+              All Orders
+            </TabsTrigger>
+            <TabsTrigger value="executions" className="gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Executions
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Orders Table */}
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-          </div>
-        ) : orders.length === 0 ? (
-          <div className="glass rounded-xl p-12 text-center">
-            <Clock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No orders yet</h3>
-            <p className="text-muted-foreground mb-4">Create your first trade order to get started</p>
-            {canCreateOrder && (
-              <Button onClick={() => setNewOrderOpen(true)} className="bg-gradient-gold hover:opacity-90">
-                <Plus className="h-4 w-4 mr-2" />
-                New Order
+          {/* Filters */}
+          <div className="glass rounded-xl p-4 mt-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="relative flex-1 min-w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search orders..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 bg-secondary/50"
+                />
+              </div>
+              <Button variant="outline" className="gap-2">
+                <Filter className="h-4 w-4" />
+                Filter
               </Button>
-            )}
+            </div>
           </div>
-        ) : (
-          <div className="glass rounded-xl overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent border-border">
-                  <TableHead className="text-xs font-medium text-muted-foreground">Order ID</TableHead>
-                  <TableHead className="text-xs font-medium text-muted-foreground">Client</TableHead>
-                  <TableHead className="text-xs font-medium text-muted-foreground">Type</TableHead>
-                  <TableHead className="text-xs font-medium text-muted-foreground">Symbol</TableHead>
-                  <TableHead className="text-xs font-medium text-muted-foreground text-right">Quantity</TableHead>
-                  <TableHead className="text-xs font-medium text-muted-foreground text-right">Price</TableHead>
-                  <TableHead className="text-xs font-medium text-muted-foreground">Status</TableHead>
-                  <TableHead className="text-xs font-medium text-muted-foreground">Date</TableHead>
-                  {canApproveOrders && (
-                    <TableHead className="text-xs font-medium text-muted-foreground text-center">Actions</TableHead>
-                  )}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredOrders.map((order) => {
-                  const status = statusConfig[order.status];
-                  const StatusIcon = status.icon;
-                  const isPending = order.status === 'pending';
-                  return (
-                    <TableRow
-                      key={order.id}
-                      className="hover:bg-muted/20 transition-colors border-border"
-                    >
-                      <TableCell className="font-mono text-sm">{order.id.slice(0, 8)}</TableCell>
-                      <TableCell>{order.clients?.client_name || 'Unknown'}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={order.order_type === 'buy' ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'}>
-                          {order.order_type.toUpperCase()}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-medium">{order.symbol}</TableCell>
-                      <TableCell className="text-right tabular-nums">{Number(order.quantity).toLocaleString()}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {order.price ? `$${Number(order.price).toFixed(2)}` : 'Market'}
-                      </TableCell>
-                      <TableCell>
-                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${status.color}`}>
-                          <StatusIcon className="h-3 w-3" />
-                          {status.label}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(order.created_at).toLocaleDateString()}
-                      </TableCell>
-                      {canApproveOrders && (
-                        <TableCell className="text-center">
-                          {isPending ? (
-                            <div className="flex items-center justify-center gap-1">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 w-8 p-0 text-success hover:text-success hover:bg-success/20"
-                                onClick={() => setConfirmDialog({ 
-                                  open: true, 
-                                  orderId: order.id, 
-                                  action: 'execute',
-                                  symbol: order.symbol 
-                                })}
-                                disabled={actionLoading === order.id}
-                              >
-                                <Check className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/20"
-                                onClick={() => setConfirmDialog({ 
-                                  open: true, 
-                                  orderId: order.id, 
-                                  action: 'cancel',
-                                  symbol: order.symbol 
-                                })}
-                                disabled={actionLoading === order.id}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+
+          <TabsContent value="all" className="mt-4">
+            {renderOrdersTable(displayedOrders, loading, canCreateOrder, canApproveOrders, actionLoading, setConfirmDialog, setNewOrderOpen, false)}
+          </TabsContent>
+
+          <TabsContent value="executions" className="mt-4">
+            {renderOrdersTable(displayedOrders, loading, canCreateOrder, canApproveOrders, actionLoading, setConfirmDialog, setNewOrderOpen, true)}
+          </TabsContent>
+        </Tabs>
       </div>
 
       <NewOrderModal 
@@ -338,5 +267,189 @@ const Orders = () => {
     </MainLayout>
   );
 };
+
+function renderOrdersTable(
+  orders: Order[],
+  loading: boolean,
+  canCreateOrder: boolean,
+  canApproveOrders: boolean,
+  actionLoading: string | null,
+  setConfirmDialog: React.Dispatch<React.SetStateAction<{
+    open: boolean;
+    orderId: string;
+    action: 'execute' | 'cancel';
+    symbol: string;
+  } | null>>,
+  setNewOrderOpen: React.Dispatch<React.SetStateAction<boolean>>,
+  isExecutionsView: boolean
+) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (orders.length === 0) {
+    return (
+      <div className="glass rounded-xl p-12 text-center">
+        {isExecutionsView ? (
+          <>
+            <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No executed orders yet</h3>
+            <p className="text-muted-foreground">Executed orders will appear here with their execution prices</p>
+          </>
+        ) : (
+          <>
+            <Clock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No orders yet</h3>
+            <p className="text-muted-foreground mb-4">Create your first trade order to get started</p>
+            {canCreateOrder && (
+              <Button onClick={() => setNewOrderOpen(true)} className="bg-gradient-gold hover:opacity-90">
+                <Plus className="h-4 w-4 mr-2" />
+                New Order
+              </Button>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass rounded-xl overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent border-border">
+            <TableHead className="text-xs font-medium text-muted-foreground">Order ID</TableHead>
+            <TableHead className="text-xs font-medium text-muted-foreground">Client</TableHead>
+            <TableHead className="text-xs font-medium text-muted-foreground">Type</TableHead>
+            <TableHead className="text-xs font-medium text-muted-foreground">Symbol</TableHead>
+            <TableHead className="text-xs font-medium text-muted-foreground">Order Type</TableHead>
+            <TableHead className="text-xs font-medium text-muted-foreground text-right">Quantity</TableHead>
+            {isExecutionsView ? (
+              <>
+                <TableHead className="text-xs font-medium text-muted-foreground text-right">Limit Price</TableHead>
+                <TableHead className="text-xs font-medium text-muted-foreground text-right">Exec. Price</TableHead>
+                <TableHead className="text-xs font-medium text-muted-foreground text-right">Total Value</TableHead>
+                <TableHead className="text-xs font-medium text-muted-foreground">Executed At</TableHead>
+              </>
+            ) : (
+              <>
+                <TableHead className="text-xs font-medium text-muted-foreground text-right">Price</TableHead>
+                <TableHead className="text-xs font-medium text-muted-foreground">Status</TableHead>
+                <TableHead className="text-xs font-medium text-muted-foreground">Date</TableHead>
+                {canApproveOrders && (
+                  <TableHead className="text-xs font-medium text-muted-foreground text-center">Actions</TableHead>
+                )}
+              </>
+            )}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {orders.map((order) => {
+            const status = statusConfig[order.status];
+            const StatusIcon = status.icon;
+            const isPending = order.status === 'pending';
+            const executionTypeLabel = order.execution_type ? executionTypeLabels[order.execution_type] : 'Market';
+            
+            return (
+              <TableRow
+                key={order.id}
+                className="hover:bg-muted/20 transition-colors border-border"
+              >
+                <TableCell className="font-mono text-sm">{order.id.slice(0, 8)}</TableCell>
+                <TableCell>{order.clients?.client_name || 'Unknown'}</TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={order.order_type === 'buy' ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'}>
+                    {order.order_type.toUpperCase()}
+                  </Badge>
+                </TableCell>
+                <TableCell className="font-medium">{order.symbol}</TableCell>
+                <TableCell>
+                  <Badge variant="secondary" className="text-xs">
+                    {executionTypeLabel}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{Number(order.quantity).toLocaleString()}</TableCell>
+                
+                {isExecutionsView ? (
+                  <>
+                    <TableCell className="text-right font-medium">
+                      {order.limit_price ? `$${Number(order.limit_price).toFixed(2)}` : '—'}
+                    </TableCell>
+                    <TableCell className="text-right font-medium text-success">
+                      {order.execution_price ? `$${Number(order.execution_price).toFixed(2)}` : order.price ? `$${Number(order.price).toFixed(2)}` : 'Market'}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">
+                      {order.total_amount ? formatCurrency(Number(order.total_amount)) : '—'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {order.executed_at ? new Date(order.executed_at).toLocaleString() : '—'}
+                    </TableCell>
+                  </>
+                ) : (
+                  <>
+                    <TableCell className="text-right font-medium">
+                      {order.price ? `$${Number(order.price).toFixed(2)}` : 'Market'}
+                    </TableCell>
+                    <TableCell>
+                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${status.color}`}>
+                        <StatusIcon className="h-3 w-3" />
+                        {status.label}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {new Date(order.created_at).toLocaleDateString()}
+                    </TableCell>
+                    {canApproveOrders && (
+                      <TableCell className="text-center">
+                        {isPending ? (
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-success hover:text-success hover:bg-success/20"
+                              onClick={() => setConfirmDialog({ 
+                                open: true, 
+                                orderId: order.id, 
+                                action: 'execute',
+                                symbol: order.symbol 
+                              })}
+                              disabled={actionLoading === order.id}
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/20"
+                              onClick={() => setConfirmDialog({ 
+                                open: true, 
+                                orderId: order.id, 
+                                action: 'cancel',
+                                symbol: order.symbol 
+                              })}
+                              disabled={actionLoading === order.id}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    )}
+                  </>
+                )}
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
 
 export default Orders;

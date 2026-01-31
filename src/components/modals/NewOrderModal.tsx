@@ -5,10 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Settings2 } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface Client {
   id: string;
@@ -21,11 +23,14 @@ interface NewOrderModalProps {
   onSuccess?: () => void;
 }
 
+type ExecutionType = 'market' | 'limit' | 'fill_or_kill' | 'good_till_cancel';
+
 export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   
   const [selectedClient, setSelectedClient] = useState('');
   const [orderType, setOrderType] = useState<'buy' | 'sell'>('buy');
@@ -33,6 +38,11 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
   const [notes, setNotes] = useState('');
+  
+  // Advanced order settings
+  const [executionType, setExecutionType] = useState<ExecutionType>('market');
+  const [limitPrice, setLimitPrice] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
 
   useEffect(() => {
     if (open) {
@@ -72,9 +82,20 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
       return;
     }
 
+    // Validate limit price for limit orders
+    if ((executionType === 'limit' || executionType === 'good_till_cancel') && !limitPrice) {
+      toast({
+        title: 'Validation Error',
+        description: 'Limit price is required for limit and GTC orders.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     setLoading(true);
 
-    const totalAmount = price && quantity ? parseFloat(price) * parseFloat(quantity) : null;
+    const effectivePrice = executionType === 'market' ? (price ? parseFloat(price) : null) : (limitPrice ? parseFloat(limitPrice) : null);
+    const totalAmount = effectivePrice && quantity ? effectivePrice * parseFloat(quantity) : null;
 
     const { error } = await supabase
       .from('orders')
@@ -86,7 +107,10 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
         price: price ? parseFloat(price) : null,
         total_amount: totalAmount,
         notes: notes.trim() || null,
-        created_by: user.id
+        created_by: user.id,
+        execution_type: executionType,
+        limit_price: limitPrice ? parseFloat(limitPrice) : null,
+        expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
       });
 
     if (error) {
@@ -96,9 +120,10 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
         variant: 'destructive'
       });
     } else {
+      const executionLabel = getExecutionTypeLabel(executionType);
       toast({
         title: 'Order Created',
-        description: `${orderType.toUpperCase()} order for ${symbol.toUpperCase()} has been placed.`
+        description: `${orderType.toUpperCase()} ${executionLabel} order for ${symbol.toUpperCase()} has been placed.`
       });
       resetForm();
       onOpenChange(false);
@@ -108,6 +133,16 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
     setLoading(false);
   };
 
+  const getExecutionTypeLabel = (type: ExecutionType): string => {
+    switch (type) {
+      case 'market': return 'Market';
+      case 'limit': return 'Limit';
+      case 'fill_or_kill': return 'Fill or Kill';
+      case 'good_till_cancel': return 'Good Till Cancel';
+      default: return 'Market';
+    }
+  };
+
   const resetForm = () => {
     setSelectedClient('');
     setOrderType('buy');
@@ -115,11 +150,18 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
     setQuantity('');
     setPrice('');
     setNotes('');
+    setExecutionType('market');
+    setLimitPrice('');
+    setExpiresAt('');
+    setShowAdvanced(false);
   };
+
+  const showLimitPrice = executionType === 'limit' || executionType === 'good_till_cancel';
+  const showExpiry = executionType === 'good_till_cancel';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New Trade Order</DialogTitle>
         </DialogHeader>
@@ -139,6 +181,7 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
               </SelectContent>
             </Select>
           </div>
+          
           <div className="space-y-2">
             <Label>Order Type *</Label>
             <div className="flex gap-2">
@@ -160,6 +203,7 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
               </Button>
             </div>
           </div>
+          
           <div className="space-y-2">
             <Label htmlFor="order-symbol">Symbol *</Label>
             <Input
@@ -171,6 +215,7 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
               required
             />
           </div>
+          
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="order-quantity">Quantity *</Label>
@@ -198,14 +243,108 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
               />
             </div>
           </div>
-          {price && quantity && (
+
+          {/* Advanced Order Options */}
+          <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="ghost" className="w-full justify-between gap-2 text-muted-foreground hover:text-foreground">
+                <span className="flex items-center gap-2">
+                  <Settings2 className="h-4 w-4" />
+                  Advanced Order Options
+                </span>
+                <span className="text-xs">{showAdvanced ? '▲' : '▼'}</span>
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-4 pt-4 border-t mt-2">
+              <div className="space-y-2">
+                <Label>Execution Type</Label>
+                <Select value={executionType} onValueChange={(v) => setExecutionType(v as ExecutionType)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="market">
+                      <div className="flex flex-col">
+                        <span>Market Order</span>
+                        <span className="text-xs text-muted-foreground">Execute immediately at best price</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="limit">
+                      <div className="flex flex-col">
+                        <span>Limit Order</span>
+                        <span className="text-xs text-muted-foreground">Execute only at specified price or better</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="fill_or_kill">
+                      <div className="flex flex-col">
+                        <span>Fill or Kill (FOK)</span>
+                        <span className="text-xs text-muted-foreground">Execute entire order immediately or cancel</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="good_till_cancel">
+                      <div className="flex flex-col">
+                        <span>Good Till Cancel (GTC)</span>
+                        <span className="text-xs text-muted-foreground">Order remains active until filled or cancelled</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {showLimitPrice && (
+                <div className="space-y-2">
+                  <Label htmlFor="limit-price">Limit Price ($) *</Label>
+                  <Input
+                    id="limit-price"
+                    type="number"
+                    value={limitPrice}
+                    onChange={(e) => setLimitPrice(e.target.value)}
+                    placeholder="Enter limit price"
+                    min="0"
+                    step="0.01"
+                    required={showLimitPrice}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {orderType === 'buy' 
+                      ? 'Order will execute when price falls to or below this level'
+                      : 'Order will execute when price rises to or above this level'
+                    }
+                  </p>
+                </div>
+              )}
+
+              {showExpiry && (
+                <div className="space-y-2">
+                  <Label htmlFor="expires-at">Expires At</Label>
+                  <Input
+                    id="expires-at"
+                    type="datetime-local"
+                    value={expiresAt}
+                    onChange={(e) => setExpiresAt(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave empty for no expiration (order remains active until filled or manually cancelled)
+                  </p>
+                </div>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* Estimated Total */}
+          {((price && quantity) || (limitPrice && quantity)) && (
             <div className="p-3 rounded-lg bg-secondary/30">
               <p className="text-sm text-muted-foreground">Estimated Total</p>
               <p className="text-xl font-semibold">
-                ${(parseFloat(price) * parseFloat(quantity)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${((parseFloat(limitPrice || price) || 0) * (parseFloat(quantity) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
+              {executionType !== 'market' && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {getExecutionTypeLabel(executionType)} order at ${limitPrice || price}/share
+                </p>
+              )}
             </div>
           )}
+          
           <div className="space-y-2">
             <Label htmlFor="order-notes">Notes</Label>
             <Textarea
@@ -216,6 +355,7 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
               rows={2}
             />
           </div>
+          
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
