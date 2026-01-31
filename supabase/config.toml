@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.corporate-actions]
 verify_jwt = false
+
+[functions.ai-insights]
+verify_jwt = false
+
+[functions.ai-growth-engine]
+verify_jwt = false
