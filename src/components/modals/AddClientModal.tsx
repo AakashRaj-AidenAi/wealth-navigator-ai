@@ -76,6 +76,7 @@ export const AddClientModal = ({ open, onOpenChange, onSuccess }: AddClientModal
 
     // Auto-create onboarding activity/task
     if (newClient) {
+      // Create activity for timeline
       await supabase.from('client_activities').insert({
         client_id: newClient.id,
         created_by: user.id,
@@ -83,6 +84,20 @@ export const AddClientModal = ({ open, onOpenChange, onSuccess }: AddClientModal
         title: 'Client Onboarding',
         description: `Complete onboarding process for ${clientName.trim()}:\n• Collect KYC documents\n• Risk assessment questionnaire\n• Investment goals discussion\n• Portfolio recommendations`,
         scheduled_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 1 week from now
+      });
+
+      // Create task in the Tasks module (automation: new_client)
+      await supabase.from('tasks').insert({
+        title: `Onboarding: ${clientName.trim()}`,
+        description: `Complete client onboarding:\n• Collect KYC documents\n• Risk assessment questionnaire\n• Investment goals discussion\n• Portfolio recommendations`,
+        priority: 'high',
+        status: 'todo',
+        due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        client_id: newClient.id,
+        trigger_type: 'new_client',
+        trigger_reference_id: newClient.id,
+        assigned_to: user.id,
+        created_by: user.id,
       });
 
       // Add prospect tag automatically for new clients

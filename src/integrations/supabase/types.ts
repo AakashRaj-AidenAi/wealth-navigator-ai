@@ -613,6 +613,77 @@ export type Database = {
         }
         Relationships: []
       }
+      tasks: {
+        Row: {
+          assigned_to: string
+          client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          due_date: string | null
+          due_time: string | null
+          id: string
+          is_recurring: boolean | null
+          next_occurrence: string | null
+          priority: Database["public"]["Enums"]["task_priority"]
+          recurrence_pattern: string | null
+          status: Database["public"]["Enums"]["task_status"]
+          title: string
+          trigger_reference_id: string | null
+          trigger_type: Database["public"]["Enums"]["task_trigger"]
+          updated_at: string
+        }
+        Insert: {
+          assigned_to: string
+          client_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          due_date?: string | null
+          due_time?: string | null
+          id?: string
+          is_recurring?: boolean | null
+          next_occurrence?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          recurrence_pattern?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+          title: string
+          trigger_reference_id?: string | null
+          trigger_type?: Database["public"]["Enums"]["task_trigger"]
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string
+          client_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          due_date?: string | null
+          due_time?: string | null
+          id?: string
+          is_recurring?: boolean | null
+          next_occurrence?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          recurrence_pattern?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+          title?: string
+          trigger_reference_id?: string | null
+          trigger_type?: Database["public"]["Enums"]["task_trigger"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -686,6 +757,17 @@ export type Database = {
         | "review_meeting"
         | "custom"
       report_type: "compliance" | "analytics" | "performance" | "risk"
+      task_priority: "low" | "medium" | "high" | "urgent"
+      task_status: "todo" | "in_progress" | "done" | "cancelled"
+      task_trigger:
+        | "manual"
+        | "new_client"
+        | "new_lead"
+        | "meeting_logged"
+        | "proposal_sent"
+        | "quarterly_review"
+        | "sip_missed"
+        | "recurring"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -851,6 +933,18 @@ export const Constants = {
         "custom",
       ],
       report_type: ["compliance", "analytics", "performance", "risk"],
+      task_priority: ["low", "medium", "high", "urgent"],
+      task_status: ["todo", "in_progress", "done", "cancelled"],
+      task_trigger: [
+        "manual",
+        "new_client",
+        "new_lead",
+        "meeting_logged",
+        "proposal_sent",
+        "quarterly_review",
+        "sip_missed",
+        "recurring",
+      ],
     },
   },
 } as const

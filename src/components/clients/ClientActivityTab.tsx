@@ -120,6 +120,21 @@ export const ClientActivityTab = ({ clientId }: ClientActivityTabProps) => {
       scheduled_at: form.scheduled_at || null
     });
 
+    // Automation: Create a follow-up task when meeting is logged
+    if (!error && form.activity_type === 'meeting') {
+      await supabase.from('tasks').insert({
+        title: `Follow-up: ${form.title}`,
+        description: `Follow up after meeting: ${form.title}${form.description ? `\n\nNotes: ${form.description}` : ''}`,
+        priority: 'medium',
+        status: 'todo',
+        due_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 3 days from now
+        client_id: clientId,
+        trigger_type: 'meeting_logged',
+        assigned_to: user.id,
+        created_by: user.id,
+      });
+    }
+
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {

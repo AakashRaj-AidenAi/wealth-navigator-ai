@@ -6,11 +6,12 @@ import { AlertsPanel } from '@/components/dashboard/AlertsPanel';
 import { PortfolioChart } from '@/components/dashboard/PortfolioChart';
 import { PerformanceChart } from '@/components/dashboard/PerformanceChart';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
+import { TodaysPlanWidget } from '@/components/dashboard/TodaysPlanWidget';
 import { AICopilot } from '@/components/ai/AICopilot';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
-import { DollarSign, Users, TrendingUp, Shield, Briefcase, AlertTriangle } from 'lucide-react';
+import { DollarSign, Users, TrendingUp, Briefcase } from 'lucide-react';
 
 interface DashboardStats {
   totalAUM: number;
@@ -132,35 +133,11 @@ const Dashboard = () => {
         {/* Activity Feed - Full Width */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ActivityFeed />
-          <div className="glass rounded-xl p-6">
-            <h3 className="font-semibold mb-4">Upcoming Tasks</h3>
-            <div className="space-y-3">
-              {[
-                { task: 'Q1 Portfolio Review - Victoria Sterling', due: 'Feb 5, 2025', priority: 'high' },
-                { task: 'IPS Annual Update - Harrison Trust', due: 'Feb 10, 2025', priority: 'medium' },
-                { task: 'New Client Onboarding - Quantum Ventures', due: 'Feb 15, 2025', priority: 'high' },
-                { task: 'Rebalance Execution - Meridian Capital', due: 'Feb 8, 2025', priority: 'medium' },
-              ].map((item, i) => (
-                <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors cursor-pointer">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'h-2 w-2 rounded-full',
-                      item.priority === 'high' ? 'bg-destructive' : 'bg-warning'
-                    )} />
-                    <span className="text-sm">{item.task}</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">{item.due}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <TodaysPlanWidget />
         </div>
       </div>
     </MainLayout>
   );
 };
-
-// Helper for conditional classes
-const cn = (...classes: (string | boolean | undefined)[]) => classes.filter(Boolean).join(' ');
 
 export default Dashboard;

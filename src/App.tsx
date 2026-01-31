@@ -19,6 +19,7 @@ import Messages from "./pages/Messages";
 import Admin from "./pages/Admin";
 import Settings from "./pages/Settings";
 import Copilot from "./pages/Copilot";
+import Tasks from "./pages/Tasks";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -59,6 +60,7 @@ const AppRoutes = () => (
     <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
     <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
     <Route path="/copilot" element={<ProtectedRoute><Copilot /></ProtectedRoute>} />
+    <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
     <Route path="*" element={<NotFound />} />
   </Routes>
