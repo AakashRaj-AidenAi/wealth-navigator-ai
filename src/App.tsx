@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Clients from "./pages/Clients";
+import ClientProfile from "./pages/ClientProfile";
 import Portfolios from "./pages/Portfolios";
 import Goals from "./pages/Goals";
 import CIODesk from "./pages/CIODesk";
@@ -47,6 +48,7 @@ const AppRoutes = () => (
     <Route path="/auth" element={<Auth />} />
     <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
     <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
+    <Route path="/clients/:id" element={<ProtectedRoute><ClientProfile /></ProtectedRoute>} />
     <Route path="/portfolios" element={<ProtectedRoute><Portfolios /></ProtectedRoute>} />
     <Route path="/goals" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
     <Route path="/cio" element={<ProtectedRoute><CIODesk /></ProtectedRoute>} />

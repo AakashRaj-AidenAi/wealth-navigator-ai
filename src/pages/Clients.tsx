@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -61,6 +62,7 @@ const statusColors: Record<string, string> = {
 };
 
 const Clients = () => {
+  const navigate = useNavigate();
   const { role } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -174,6 +176,7 @@ const Clients = () => {
               <div
                 key={client.id}
                 className="glass rounded-xl p-5 hover:border-primary/30 transition-all duration-300 cursor-pointer group"
+                onClick={() => navigate(`/clients/${client.id}`)}
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -188,14 +191,14 @@ const Clients = () => {
                     </div>
                   </div>
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" size="icon" className="h-8 w-8">
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem>View Profile</DropdownMenuItem>
-                      <DropdownMenuItem>Edit Details</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate(`/clients/${client.id}`)}>View Profile</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate(`/clients/${client.id}`)}>Edit Details</DropdownMenuItem>
                       <DropdownMenuItem>View Portfolio</DropdownMenuItem>
                       <DropdownMenuItem>Schedule Meeting</DropdownMenuItem>
                     </DropdownMenuContent>

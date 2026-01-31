@@ -14,13 +14,386 @@ export type Database = {
   }
   public: {
     Tables: {
-      clients: {
+      client_activities: {
         Row: {
-          advisor_id: string
-          client_name: string
+          activity_type: Database["public"]["Enums"]["activity_type"]
+          client_id: string
+          completed_at: string | null
           created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          metadata: Json | null
+          scheduled_at: string | null
+          title: string
+        }
+        Insert: {
+          activity_type: Database["public"]["Enums"]["activity_type"]
+          client_id: string
+          completed_at?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          scheduled_at?: string | null
+          title: string
+        }
+        Update: {
+          activity_type?: Database["public"]["Enums"]["activity_type"]
+          client_id?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          scheduled_at?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_activities_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_documents: {
+        Row: {
+          client_id: string
+          created_at: string
+          document_type: Database["public"]["Enums"]["document_type"]
+          expiry_date: string | null
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          notes: string | null
+          uploaded_by: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          document_type: Database["public"]["Enums"]["document_type"]
+          expiry_date?: string | null
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          uploaded_by: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          document_type?: Database["public"]["Enums"]["document_type"]
+          expiry_date?: string | null
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_documents_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_family_members: {
+        Row: {
+          client_id: string
+          created_at: string
+          date_of_birth: string | null
           email: string | null
           id: string
+          is_nominee: boolean | null
+          name: string
+          phone: string | null
+          relationship: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          date_of_birth?: string | null
+          email?: string | null
+          id?: string
+          is_nominee?: boolean | null
+          name: string
+          phone?: string | null
+          relationship: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          date_of_birth?: string | null
+          email?: string | null
+          id?: string
+          is_nominee?: boolean | null
+          name?: string
+          phone?: string | null
+          relationship?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_family_members_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_life_goals: {
+        Row: {
+          client_id: string
+          created_at: string
+          description: string | null
+          goal_type: string
+          id: string
+          name: string
+          priority: string | null
+          status: string | null
+          target_amount: number | null
+          target_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          description?: string | null
+          goal_type: string
+          id?: string
+          name: string
+          priority?: string | null
+          status?: string | null
+          target_amount?: number | null
+          target_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          description?: string | null
+          goal_type?: string
+          id?: string
+          name?: string
+          priority?: string | null
+          status?: string | null
+          target_amount?: number | null
+          target_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_life_goals_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_nominees: {
+        Row: {
+          address: string | null
+          client_id: string
+          created_at: string
+          date_of_birth: string | null
+          id: string
+          id_proof_number: string | null
+          id_proof_type: string | null
+          name: string
+          percentage: number
+          relationship: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          client_id: string
+          created_at?: string
+          date_of_birth?: string | null
+          id?: string
+          id_proof_number?: string | null
+          id_proof_type?: string | null
+          name: string
+          percentage: number
+          relationship: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          client_id?: string
+          created_at?: string
+          date_of_birth?: string | null
+          id?: string
+          id_proof_number?: string | null
+          id_proof_type?: string | null
+          name?: string
+          percentage?: number
+          relationship?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_nominees_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_notes: {
+        Row: {
+          client_id: string
+          content: string
+          created_at: string
+          created_by: string
+          id: string
+          is_pinned: boolean | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          content: string
+          created_at?: string
+          created_by: string
+          id?: string
+          is_pinned?: boolean | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          content?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          is_pinned?: boolean | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_notes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_reminders: {
+        Row: {
+          client_id: string
+          completed_at: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          is_completed: boolean | null
+          is_recurring: boolean | null
+          recurrence_pattern: string | null
+          reminder_date: string
+          reminder_type: Database["public"]["Enums"]["reminder_type"]
+          title: string
+        }
+        Insert: {
+          client_id: string
+          completed_at?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          is_completed?: boolean | null
+          is_recurring?: boolean | null
+          recurrence_pattern?: string | null
+          reminder_date: string
+          reminder_type: Database["public"]["Enums"]["reminder_type"]
+          title: string
+        }
+        Update: {
+          client_id?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          is_completed?: boolean | null
+          is_recurring?: boolean | null
+          recurrence_pattern?: string | null
+          reminder_date?: string
+          reminder_type?: Database["public"]["Enums"]["reminder_type"]
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_reminders_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_tags: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          tag: Database["public"]["Enums"]["client_tag"]
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          tag: Database["public"]["Enums"]["client_tag"]
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          tag?: Database["public"]["Enums"]["client_tag"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_tags_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          aadhar_number: string | null
+          address: string | null
+          advisor_id: string
+          anniversary_date: string | null
+          client_name: string
+          created_at: string
+          date_of_birth: string | null
+          email: string | null
+          id: string
+          kyc_expiry_date: string | null
+          pan_number: string | null
           phone: string | null
           risk_profile: string | null
           status: string | null
@@ -28,11 +401,17 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          aadhar_number?: string | null
+          address?: string | null
           advisor_id: string
+          anniversary_date?: string | null
           client_name: string
           created_at?: string
+          date_of_birth?: string | null
           email?: string | null
           id?: string
+          kyc_expiry_date?: string | null
+          pan_number?: string | null
           phone?: string | null
           risk_profile?: string | null
           status?: string | null
@@ -40,11 +419,17 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          aadhar_number?: string | null
+          address?: string | null
           advisor_id?: string
+          anniversary_date?: string | null
           client_name?: string
           created_at?: string
+          date_of_birth?: string | null
           email?: string | null
           id?: string
+          kyc_expiry_date?: string | null
+          pan_number?: string | null
           phone?: string | null
           risk_profile?: string | null
           status?: string | null
@@ -267,10 +652,39 @@ export type Database = {
       is_wealth_advisor: { Args: never; Returns: boolean }
     }
     Enums: {
+      activity_type:
+        | "call"
+        | "email"
+        | "meeting"
+        | "note"
+        | "document"
+        | "reminder"
       app_role: "wealth_advisor" | "compliance_officer" | "client"
+      client_tag:
+        | "hni"
+        | "uhni"
+        | "prospect"
+        | "active"
+        | "dormant"
+        | "vip"
+        | "nri"
+      document_type:
+        | "kyc"
+        | "agreement"
+        | "statement"
+        | "id_proof"
+        | "address_proof"
+        | "other"
       execution_type: "market" | "limit" | "fill_or_kill" | "good_till_cancel"
       order_status: "pending" | "executed" | "cancelled"
       order_type: "buy" | "sell"
+      reminder_type:
+        | "birthday"
+        | "anniversary"
+        | "kyc_expiry"
+        | "maturity_date"
+        | "review_meeting"
+        | "custom"
       report_type: "compliance" | "analytics" | "performance" | "risk"
     }
     CompositeTypes: {
@@ -399,10 +813,43 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      activity_type: [
+        "call",
+        "email",
+        "meeting",
+        "note",
+        "document",
+        "reminder",
+      ],
       app_role: ["wealth_advisor", "compliance_officer", "client"],
+      client_tag: [
+        "hni",
+        "uhni",
+        "prospect",
+        "active",
+        "dormant",
+        "vip",
+        "nri",
+      ],
+      document_type: [
+        "kyc",
+        "agreement",
+        "statement",
+        "id_proof",
+        "address_proof",
+        "other",
+      ],
       execution_type: ["market", "limit", "fill_or_kill", "good_till_cancel"],
       order_status: ["pending", "executed", "cancelled"],
       order_type: ["buy", "sell"],
+      reminder_type: [
+        "birthday",
+        "anniversary",
+        "kyc_expiry",
+        "maturity_date",
+        "review_meeting",
+        "custom",
+      ],
       report_type: ["compliance", "analytics", "performance", "risk"],
     },
   },
