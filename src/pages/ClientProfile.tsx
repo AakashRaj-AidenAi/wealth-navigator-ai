@@ -28,7 +28,9 @@ import {
   PieChart,
   CheckSquare,
   StickyNote,
-  Landmark
+  Landmark,
+  Sparkles,
+  Brain
 } from 'lucide-react';
 
 import { ClientOverviewTab } from '@/components/clients/ClientOverviewTab';
@@ -44,6 +46,7 @@ import { ClientCommunicationsTab } from '@/components/clients/ClientCommunicatio
 import { ClientCorporateActionsTab } from '@/components/clients/ClientCorporateActionsTab';
 import { EditClientModal } from '@/components/modals/EditClientModal';
 import { QuickNoteModal } from '@/components/clients/QuickNoteModal';
+import { AIDraftMessageModal, MeetingSummaryModal } from '@/components/ai-growth-engine';
 
 interface Client {
   id: string;
@@ -101,6 +104,8 @@ const ClientProfile = () => {
   const [loading, setLoading] = useState(true);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [quickNoteOpen, setQuickNoteOpen] = useState(false);
+  const [aiDraftOpen, setAiDraftOpen] = useState(false);
+  const [meetingSummaryOpen, setMeetingSummaryOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
 
   const fetchClient = async () => {
@@ -220,9 +225,27 @@ const ClientProfile = () => {
                     ))}
                   </div>
                 </div>
-                <div className="ml-auto flex items-center gap-2">
+                <div className="ml-auto flex items-center gap-2 flex-wrap">
                   {canEdit && (
                     <>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="gap-2 text-primary border-primary/30 hover:bg-primary/10"
+                        onClick={() => setAiDraftOpen(true)}
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        AI Draft
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="gap-2 text-primary border-primary/30 hover:bg-primary/10"
+                        onClick={() => setMeetingSummaryOpen(true)}
+                      >
+                        <Brain className="h-4 w-4" />
+                        Meeting Notes
+                      </Button>
                       <Button 
                         variant="outline" 
                         size="sm" 
@@ -397,6 +420,20 @@ const ClientProfile = () => {
             // Will be refreshed by the tab
           }
         }}
+      />
+
+      <AIDraftMessageModal
+        open={aiDraftOpen}
+        onOpenChange={setAiDraftOpen}
+        clientId={client.id}
+        clientName={client.client_name}
+      />
+
+      <MeetingSummaryModal
+        open={meetingSummaryOpen}
+        onOpenChange={setMeetingSummaryOpen}
+        clientId={client.id}
+        clientName={client.client_name}
       />
     </MainLayout>
   );

@@ -8,10 +8,9 @@ import { PortfolioChart } from '@/components/dashboard/PortfolioChart';
 import { PerformanceChart } from '@/components/dashboard/PerformanceChart';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import { TodaysPlanWidget } from '@/components/dashboard/TodaysPlanWidget';
-import { ClientsNeedingAttention } from '@/components/dashboard/ClientsNeedingAttention';
 import { LeadsPipelineWidget } from '@/components/dashboard/LeadsPipelineWidget';
-import { AIInsightsWidget } from '@/components/dashboard/AIInsightsWidget';
 import { CorporateActionsWidget } from '@/components/dashboard/CorporateActionsWidget';
+import { AIInsightsCenter } from '@/components/ai-growth-engine';
 import { AICopilot } from '@/components/ai/AICopilot';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -233,8 +232,8 @@ const Dashboard = () => {
           />
         </div>
 
-        {/* AI Insights Section */}
-        <AIInsightsWidget />
+        {/* AI Growth Engine - Insights Center */}
+        <AIInsightsCenter />
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -249,16 +248,15 @@ const Dashboard = () => {
 
           {/* Right Column - Widgets */}
           <div className="space-y-6">
-            <ClientsNeedingAttention />
             <AlertsPanel />
+            <CorporateActionsWidget />
           </div>
         </div>
 
         {/* Bottom Row - Activity & Tasks */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <LeadsPipelineWidget />
           <TodaysPlanWidget />
-          <CorporateActionsWidget />
           <ActivityFeed />
         </div>
 
