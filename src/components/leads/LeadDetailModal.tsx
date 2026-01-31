@@ -10,9 +10,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
 import { formatDistanceToNow } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 import { 
   Mail, Phone, Star, Calendar, Clock, MessageSquare, 
-  UserCheck, Edit, Trash2, Activity, Send
+  UserCheck, Trash2, Activity, Send, CheckCircle, ExternalLink
 } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 
@@ -23,7 +24,6 @@ interface LeadDetailModalProps {
   lead: Lead | null;
   onClose: () => void;
   onUpdate: () => void;
-  onConvert: () => void;
 }
 
 const stageLabels: Record<string, string> = {
@@ -44,17 +44,22 @@ const stageColors: Record<string, string> = {
   lost: 'bg-red-500'
 };
 
-export const LeadDetailModal = ({ lead, onClose, onUpdate, onConvert }: LeadDetailModalProps) => {
+export const LeadDetailModal = ({ lead, onClose, onUpdate }: LeadDetailModalProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [activities, setActivities] = useState<LeadActivity[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
+  const [clientInfo, setClientInfo] = useState<{ id: string; client_code: string; client_name: string } | null>(null);
 
   useEffect(() => {
     if (lead) {
       fetchActivities();
+      fetchClientInfo();
+    } else {
+      setClientInfo(null);
     }
   }, [lead?.id]);
 
@@ -70,6 +75,28 @@ export const LeadDetailModal = ({ lead, onClose, onUpdate, onConvert }: LeadDeta
     
     if (data) setActivities(data);
     setLoadingActivities(false);
+  };
+
+  const fetchClientInfo = async () => {
+    if (!lead?.converted_client_id) {
+      setClientInfo(null);
+      return;
+    }
+    
+    const { data } = await supabase
+      .from('clients')
+      .select('id, client_code, client_name')
+      .eq('id', lead.converted_client_id)
+      .single();
+    
+    if (data) setClientInfo(data);
+  };
+
+  const handleViewClient = () => {
+    if (clientInfo) {
+      onClose();
+      navigate(`/clients/${clientInfo.id}`);
+    }
   };
 
   const handleAddNote = async () => {
@@ -144,7 +171,7 @@ export const LeadDetailModal = ({ lead, onClose, onUpdate, onConvert }: LeadDeta
 
   if (!lead) return null;
 
-  const isConvertible = lead.stage === 'closed_won' && !lead.converted_client_id;
+  const isConverted = lead.stage === 'closed_won' && lead.converted_client_id;
 
   return (
     <Dialog open={!!lead} onOpenChange={() => onClose()}>
@@ -167,15 +194,22 @@ export const LeadDetailModal = ({ lead, onClose, onUpdate, onConvert }: LeadDeta
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {isConvertible && (
-                <Button onClick={onConvert} className="gap-2 bg-gradient-gold hover:opacity-90">
-                  <UserCheck className="h-4 w-4" />
-                  Convert to Client
+              {isConverted && clientInfo && (
+                <Button 
+                  onClick={handleViewClient} 
+                  variant="outline"
+                  className="gap-2 border-success text-success hover:bg-success/10"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  Converted → {clientInfo.client_code}
+                  <ExternalLink className="h-3 w-3" />
                 </Button>
               )}
-              <Button variant="ghost" size="icon" onClick={handleDelete}>
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
+              {!isConverted && (
+                <Button variant="ghost" size="icon" onClick={handleDelete}>
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              )}
             </div>
           </div>
         </DialogHeader>

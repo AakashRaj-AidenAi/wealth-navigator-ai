@@ -574,7 +574,9 @@ export type Database = {
           address: string | null
           advisor_id: string
           anniversary_date: string | null
+          client_code: string | null
           client_name: string
+          converted_from_lead_id: string | null
           created_at: string
           date_of_birth: string | null
           email: string | null
@@ -583,6 +585,7 @@ export type Database = {
           pan_number: string | null
           phone: string | null
           risk_profile: string | null
+          source: string | null
           status: string | null
           total_assets: number | null
           updated_at: string
@@ -592,7 +595,9 @@ export type Database = {
           address?: string | null
           advisor_id: string
           anniversary_date?: string | null
+          client_code?: string | null
           client_name: string
+          converted_from_lead_id?: string | null
           created_at?: string
           date_of_birth?: string | null
           email?: string | null
@@ -601,6 +606,7 @@ export type Database = {
           pan_number?: string | null
           phone?: string | null
           risk_profile?: string | null
+          source?: string | null
           status?: string | null
           total_assets?: number | null
           updated_at?: string
@@ -610,7 +616,9 @@ export type Database = {
           address?: string | null
           advisor_id?: string
           anniversary_date?: string | null
+          client_code?: string | null
           client_name?: string
+          converted_from_lead_id?: string | null
           created_at?: string
           date_of_birth?: string | null
           email?: string | null
@@ -619,11 +627,20 @@ export type Database = {
           pan_number?: string | null
           phone?: string | null
           risk_profile?: string | null
+          source?: string | null
           status?: string | null
           total_assets?: number | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "clients_converted_from_lead_id_fkey"
+            columns: ["converted_from_lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       communication_campaigns: {
         Row: {
@@ -1233,6 +1250,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_client_code: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
