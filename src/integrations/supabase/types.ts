@@ -488,6 +488,109 @@ export type Database = {
           },
         ]
       }
+      lead_activities: {
+        Row: {
+          activity_type: string
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          lead_id: string
+          title: string
+        }
+        Insert: {
+          activity_type: string
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          lead_id: string
+          title: string
+        }
+        Update: {
+          activity_type?: string
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          lead_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_activities_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          assigned_to: string
+          converted_at: string | null
+          converted_client_id: string | null
+          created_at: string
+          email: string | null
+          expected_value: number | null
+          id: string
+          last_activity_at: string | null
+          lead_score: number | null
+          name: string
+          notes: string | null
+          phone: string | null
+          probability: number | null
+          source: Database["public"]["Enums"]["lead_source"]
+          stage: Database["public"]["Enums"]["lead_stage"]
+          updated_at: string
+        }
+        Insert: {
+          assigned_to: string
+          converted_at?: string | null
+          converted_client_id?: string | null
+          created_at?: string
+          email?: string | null
+          expected_value?: number | null
+          id?: string
+          last_activity_at?: string | null
+          lead_score?: number | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          probability?: number | null
+          source?: Database["public"]["Enums"]["lead_source"]
+          stage?: Database["public"]["Enums"]["lead_stage"]
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string
+          converted_at?: string | null
+          converted_client_id?: string | null
+          created_at?: string
+          email?: string | null
+          expected_value?: number | null
+          id?: string
+          last_activity_at?: string | null
+          lead_score?: number | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          probability?: number | null
+          source?: Database["public"]["Enums"]["lead_source"]
+          stage?: Database["public"]["Enums"]["lead_stage"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_converted_client_id_fkey"
+            columns: ["converted_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           client_id: string
@@ -747,6 +850,22 @@ export type Database = {
         | "address_proof"
         | "other"
       execution_type: "market" | "limit" | "fill_or_kill" | "good_till_cancel"
+      lead_source:
+        | "referral"
+        | "website"
+        | "social_media"
+        | "event"
+        | "cold_call"
+        | "advertisement"
+        | "partner"
+        | "other"
+      lead_stage:
+        | "new"
+        | "contacted"
+        | "meeting"
+        | "proposal"
+        | "closed_won"
+        | "lost"
       order_status: "pending" | "executed" | "cancelled"
       order_type: "buy" | "sell"
       reminder_type:
@@ -922,6 +1041,24 @@ export const Constants = {
         "other",
       ],
       execution_type: ["market", "limit", "fill_or_kill", "good_till_cancel"],
+      lead_source: [
+        "referral",
+        "website",
+        "social_media",
+        "event",
+        "cold_call",
+        "advertisement",
+        "partner",
+        "other",
+      ],
+      lead_stage: [
+        "new",
+        "contacted",
+        "meeting",
+        "proposal",
+        "closed_won",
+        "lost",
+      ],
       order_status: ["pending", "executed", "cancelled"],
       order_type: ["buy", "sell"],
       reminder_type: [
