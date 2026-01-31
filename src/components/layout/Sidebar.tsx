@@ -15,6 +15,7 @@ import {
   Bot,
   ChevronLeft,
   ChevronRight,
+  CheckSquare,
 } from 'lucide-react';
 
 interface NavItem {
@@ -26,6 +27,7 @@ interface NavItem {
 
 const mainNavItems: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
+  { label: 'Tasks', icon: CheckSquare, href: '/tasks' },
   { label: 'Clients', icon: Users, href: '/clients' },
   { label: 'Portfolios', icon: Briefcase, href: '/portfolios' },
   { label: 'Goals & Planning', icon: Target, href: '/goals' },
