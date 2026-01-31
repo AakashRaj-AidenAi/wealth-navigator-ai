@@ -109,7 +109,11 @@ export type Database = {
           created_at: string
           created_by: string | null
           executed_at: string | null
+          execution_price: number | null
+          execution_type: Database["public"]["Enums"]["execution_type"] | null
+          expires_at: string | null
           id: string
+          limit_price: number | null
           notes: string | null
           order_type: Database["public"]["Enums"]["order_type"]
           price: number | null
@@ -123,7 +127,11 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           executed_at?: string | null
+          execution_price?: number | null
+          execution_type?: Database["public"]["Enums"]["execution_type"] | null
+          expires_at?: string | null
           id?: string
+          limit_price?: number | null
           notes?: string | null
           order_type: Database["public"]["Enums"]["order_type"]
           price?: number | null
@@ -137,7 +145,11 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           executed_at?: string | null
+          execution_price?: number | null
+          execution_type?: Database["public"]["Enums"]["execution_type"] | null
+          expires_at?: string | null
           id?: string
+          limit_price?: number | null
           notes?: string | null
           order_type?: Database["public"]["Enums"]["order_type"]
           price?: number | null
@@ -256,6 +268,7 @@ export type Database = {
     }
     Enums: {
       app_role: "wealth_advisor" | "compliance_officer" | "client"
+      execution_type: "market" | "limit" | "fill_or_kill" | "good_till_cancel"
       order_status: "pending" | "executed" | "cancelled"
       order_type: "buy" | "sell"
       report_type: "compliance" | "analytics" | "performance" | "risk"
@@ -387,6 +400,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["wealth_advisor", "compliance_officer", "client"],
+      execution_type: ["market", "limit", "fill_or_kill", "good_till_cancel"],
       order_status: ["pending", "executed", "cancelled"],
       order_type: ["buy", "sell"],
       report_type: ["compliance", "analytics", "performance", "risk"],
