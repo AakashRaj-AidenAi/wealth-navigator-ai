@@ -10,6 +10,7 @@ import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import { TodaysPlanWidget } from '@/components/dashboard/TodaysPlanWidget';
 import { ClientsNeedingAttention } from '@/components/dashboard/ClientsNeedingAttention';
 import { LeadsPipelineWidget } from '@/components/dashboard/LeadsPipelineWidget';
+import { AIInsightsWidget } from '@/components/dashboard/AIInsightsWidget';
 import { AICopilot } from '@/components/ai/AICopilot';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -230,6 +231,9 @@ const Dashboard = () => {
             subtitle={stats.alertsCount > 0 ? 'Requires attention' : 'All clear'}
           />
         </div>
+
+        {/* AI Insights Section */}
+        <AIInsightsWidget />
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
