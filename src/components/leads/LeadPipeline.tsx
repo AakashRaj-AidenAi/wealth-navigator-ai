@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrencyShort } from '@/lib/currency';
-import { User, Phone, Mail, GripVertical, Star } from 'lucide-react';
+import { Phone, Mail, GripVertical, Star, CheckCircle, Lock } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 
 type Lead = Database['public']['Tables']['leads']['Row'];
@@ -96,55 +95,70 @@ export const LeadPipeline = ({ leads, onStageChange, onLeadClick }: LeadPipeline
             </div>
 
             <div className="p-2 space-y-2 min-h-[400px] bg-secondary/20 rounded-b-xl">
-              {stageLeads.map((lead) => (
-                <div
-                  key={lead.id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, lead.id)}
-                  onClick={() => onLeadClick(lead)}
-                  className={`p-3 rounded-lg bg-background border cursor-pointer transition-all hover:shadow-md hover:border-primary/30 ${
-                    draggedLead === lead.id ? 'opacity-50' : ''
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5 cursor-grab" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <h4 className="font-medium text-sm truncate">{lead.name}</h4>
-                        <div className={`flex items-center gap-1 ${getScoreColor(lead.lead_score || 0)}`}>
-                          <Star className="h-3 w-3 fill-current" />
-                          <span className="text-xs font-medium">{lead.lead_score}</span>
+              {stageLeads.map((lead) => {
+                const isConverted = lead.stage === 'closed_won' && lead.converted_client_id;
+                
+                return (
+                  <div
+                    key={lead.id}
+                    draggable={!isConverted}
+                    onDragStart={(e) => !isConverted && handleDragStart(e, lead.id)}
+                    onClick={() => onLeadClick(lead)}
+                    className={`p-3 rounded-lg bg-background border cursor-pointer transition-all hover:shadow-md hover:border-primary/30 ${
+                      draggedLead === lead.id ? 'opacity-50' : ''
+                    } ${isConverted ? 'border-success/30 bg-success/5' : ''}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      {isConverted ? (
+                        <Lock className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                      ) : (
+                        <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5 cursor-grab" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="font-medium text-sm truncate">{lead.name}</h4>
+                          {isConverted ? (
+                            <div className="flex items-center gap-1 text-success">
+                              <CheckCircle className="h-3 w-3" />
+                              <span className="text-xs font-medium">Converted</span>
+                            </div>
+                          ) : (
+                            <div className={`flex items-center gap-1 ${getScoreColor(lead.lead_score || 0)}`}>
+                              <Star className="h-3 w-3 fill-current" />
+                              <span className="text-xs font-medium">{lead.lead_score}</span>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                      
-                      <div className="flex flex-col gap-1 mt-2 text-xs text-muted-foreground">
-                        {lead.email && (
-                          <div className="flex items-center gap-1 truncate">
-                            <Mail className="h-3 w-3" />
-                            <span className="truncate">{lead.email}</span>
-                          </div>
-                        )}
-                        {lead.phone && (
-                          <div className="flex items-center gap-1">
-                            <Phone className="h-3 w-3" />
-                            <span>{lead.phone}</span>
-                          </div>
-                        )}
-                      </div>
+                        
+                        <div className="flex flex-col gap-1 mt-2 text-xs text-muted-foreground">
+                          {lead.email && (
+                            <div className="flex items-center gap-1 truncate">
+                              <Mail className="h-3 w-3" />
+                              <span className="truncate">{lead.email}</span>
+                            </div>
+                          )}
+                          {lead.phone && (
+                            <div className="flex items-center gap-1">
+                              <Phone className="h-3 w-3" />
+                              <span>{lead.phone}</span>
+                            </div>
+                          )}
+                        </div>
 
-                      <div className="flex items-center justify-between mt-3">
-                        <Badge variant="outline" className="text-xs capitalize">
-                          {lead.source?.replace('_', ' ')}
-                        </Badge>
-                        <div className="text-right">
-                          <p className="text-sm font-medium">{formatCurrencyShort(lead.expected_value)}</p>
-                          <p className="text-xs text-muted-foreground">{lead.probability}% prob</p>
+                        <div className="flex items-center justify-between mt-3">
+                          <Badge variant="outline" className="text-xs capitalize">
+                            {lead.source?.replace('_', ' ')}
+                          </Badge>
+                          <div className="text-right">
+                            <p className="text-sm font-medium">{formatCurrencyShort(lead.expected_value)}</p>
+                            <p className="text-xs text-muted-foreground">{lead.probability}% prob</p>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {stageLeads.length === 0 && (
                 <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">

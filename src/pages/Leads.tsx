@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -14,7 +13,6 @@ import { LeadPipeline } from '@/components/leads/LeadPipeline';
 import { LeadListView } from '@/components/leads/LeadListView';
 import { AddLeadModal } from '@/components/leads/AddLeadModal';
 import { LeadDetailModal } from '@/components/leads/LeadDetailModal';
-import { ConvertLeadModal } from '@/components/leads/ConvertLeadModal';
 import { RevenueForecast } from '@/components/leads/RevenueForecast';
 import { formatCurrencyShort } from '@/lib/currency';
 import type { Database } from '@/integrations/supabase/types';
@@ -31,7 +29,6 @@ const Leads = () => {
   const [viewMode, setViewMode] = useState<'pipeline' | 'list'>('pipeline');
   const [addLeadOpen, setAddLeadOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [convertLead, setConvertLead] = useState<Lead | null>(null);
 
   useEffect(() => {
     fetchLeads();
@@ -59,13 +56,16 @@ const Leads = () => {
     const lead = leads.find(l => l.id === leadId);
     if (!lead || !user) return;
 
-    const { error } = await supabase
+    // For closed_won, the database trigger handles automatic conversion
+    const { data: updatedLead, error } = await supabase
       .from('leads')
       .update({ 
         stage: newStage,
         last_activity_at: new Date().toISOString()
       })
-      .eq('id', leadId);
+      .eq('id', leadId)
+      .select('*, clients!leads_converted_client_id_fkey(id, client_code, client_name)')
+      .single();
 
     if (error) {
       toast({
@@ -76,39 +76,46 @@ const Leads = () => {
       return;
     }
 
-    // Log activity
-    await supabase.from('lead_activities').insert({
-      lead_id: leadId,
-      activity_type: 'stage_change',
-      title: `Stage changed to ${newStage.replace('_', ' ')}`,
-      description: `Lead moved from ${lead.stage.replace('_', ' ')} to ${newStage.replace('_', ' ')}`,
-      created_by: user.id
-    });
+    // Log activity for non-conversion stage changes
+    if (newStage !== 'closed_won') {
+      await supabase.from('lead_activities').insert({
+        lead_id: leadId,
+        activity_type: 'stage_change',
+        title: `Stage changed to ${newStage.replace('_', ' ')}`,
+        description: `Lead moved from ${lead.stage.replace('_', ' ')} to ${newStage.replace('_', ' ')}`,
+        created_by: user.id
+      });
 
-    // Auto-create task for stage change
-    await supabase.from('tasks').insert({
-      title: `Follow up with ${lead.name} - ${newStage.replace('_', ' ')} stage`,
-      description: `Lead "${lead.name}" has moved to ${newStage.replace('_', ' ')} stage. Take appropriate action.`,
-      priority: newStage === 'proposal' ? 'high' : 'medium',
-      status: 'todo',
-      due_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      trigger_type: 'new_lead',
-      assigned_to: user.id,
-      created_by: user.id
-    });
+      // Auto-create task for stage change
+      await supabase.from('tasks').insert({
+        title: `Follow up with ${lead.name} - ${newStage.replace('_', ' ')} stage`,
+        description: `Lead "${lead.name}" has moved to ${newStage.replace('_', ' ')} stage. Take appropriate action.`,
+        priority: newStage === 'proposal' ? 'high' : 'medium',
+        status: 'todo',
+        due_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        trigger_type: 'new_lead',
+        assigned_to: user.id,
+        created_by: user.id
+      });
+    }
 
-    setLeads(prev => 
-      prev.map(l => l.id === leadId ? { ...l, stage: newStage, last_activity_at: new Date().toISOString() } : l)
-    );
+    // Refresh leads to get updated data
+    await fetchLeads();
 
-    toast({
-      title: 'Stage Updated',
-      description: `Lead moved to ${newStage.replace('_', ' ')}`
-    });
-
-    // Check for conversion
-    if (newStage === 'closed_won') {
-      setConvertLead(leads.find(l => l.id === leadId) || null);
+    // Show appropriate toast
+    if (newStage === 'closed_won' && updatedLead?.converted_client_id) {
+      const clientData = updatedLead.clients as { id: string; client_code: string; client_name: string } | null;
+      toast({
+        title: '🎉 Lead Successfully Converted to Client',
+        description: clientData?.client_code 
+          ? `${lead.name} is now Client ${clientData.client_code}. Onboarding tasks have been created automatically.`
+          : `${lead.name} has been converted to a client. Onboarding tasks have been created automatically.`,
+      });
+    } else {
+      toast({
+        title: 'Stage Updated',
+        description: `Lead moved to ${newStage.replace('_', ' ')}`
+      });
     }
   };
 
@@ -263,19 +270,6 @@ const Leads = () => {
         lead={selectedLead}
         onClose={() => setSelectedLead(null)}
         onUpdate={fetchLeads}
-        onConvert={() => {
-          setConvertLead(selectedLead);
-          setSelectedLead(null);
-        }}
-      />
-
-      <ConvertLeadModal
-        lead={convertLead}
-        onClose={() => setConvertLead(null)}
-        onSuccess={() => {
-          setConvertLead(null);
-          fetchLeads();
-        }}
       />
     </MainLayout>
   );
