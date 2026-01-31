@@ -1,0 +1,138 @@
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { formatCurrency } from '@/lib/currency';
+import { cn } from '@/lib/utils';
+import { ChevronRight, Target } from 'lucide-react';
+
+interface PipelineStage {
+  stage: string;
+  count: number;
+  value: number;
+  color: string;
+}
+
+const stageConfig: Record<string, { label: string; color: string }> = {
+  new: { label: 'New', color: 'bg-blue-500' },
+  contacted: { label: 'Contacted', color: 'bg-cyan-500' },
+  meeting: { label: 'Meeting', color: 'bg-amber-500' },
+  proposal: { label: 'Proposal', color: 'bg-purple-500' },
+  closed_won: { label: 'Won', color: 'bg-success' }
+};
+
+export const LeadsPipelineWidget = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [stages, setStages] = useState<PipelineStage[]>([]);
+  const [totalLeads, setTotalLeads] = useState(0);
+  const [totalValue, setTotalValue] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) fetchPipelineData();
+  }, [user]);
+
+  const fetchPipelineData = async () => {
+    if (!user) return;
+
+    const { data } = await supabase
+      .from('leads')
+      .select('stage, expected_value')
+      .eq('assigned_to', user.id)
+      .neq('stage', 'lost');
+
+    if (data) {
+      const stageMap = new Map<string, { count: number; value: number }>();
+      
+      data.forEach(lead => {
+        const current = stageMap.get(lead.stage) || { count: 0, value: 0 };
+        stageMap.set(lead.stage, {
+          count: current.count + 1,
+          value: current.value + (Number(lead.expected_value) || 0)
+        });
+      });
+
+      const pipelineStages: PipelineStage[] = [];
+      Object.entries(stageConfig).forEach(([stage, config]) => {
+        const stageData = stageMap.get(stage);
+        if (stageData && stageData.count > 0) {
+          pipelineStages.push({
+            stage: config.label,
+            count: stageData.count,
+            value: stageData.value,
+            color: config.color
+          });
+        }
+      });
+
+      setStages(pipelineStages);
+      setTotalLeads(data.length);
+      setTotalValue(data.reduce((sum, l) => sum + (Number(l.expected_value) || 0), 0));
+    }
+
+    setLoading(false);
+  };
+
+  if (loading) {
+    return (
+      <div className="glass rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-8 w-20" />
+        </div>
+        <Skeleton className="h-4 w-full mb-3" />
+        <div className="space-y-2">
+          {[1, 2, 3].map(i => (
+            <Skeleton key={i} className="h-8 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const maxCount = Math.max(...stages.map(s => s.count), 1);
+
+  return (
+    <div 
+      className="glass rounded-xl p-5 cursor-pointer hover:border-primary/50 transition-all group"
+      onClick={() => navigate('/leads')}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Target className="h-5 w-5 text-primary" />
+          <h3 className="font-semibold">Leads Pipeline</h3>
+        </div>
+        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+      </div>
+
+      <div className="flex items-baseline gap-2 mb-4">
+        <span className="text-2xl font-semibold">{totalLeads}</span>
+        <span className="text-sm text-muted-foreground">leads</span>
+        <span className="text-muted-foreground">•</span>
+        <span className="text-sm text-primary font-medium">{formatCurrency(totalValue, true)}</span>
+      </div>
+
+      {stages.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-4">No active leads</p>
+      ) : (
+        <div className="space-y-2">
+          {stages.map((stage) => (
+            <div key={stage.stage} className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground w-20 truncate">{stage.stage}</span>
+              <div className="flex-1 h-6 bg-secondary/50 rounded overflow-hidden">
+                <div
+                  className={cn('h-full rounded transition-all', stage.color)}
+                  style={{ width: `${(stage.count / maxCount) * 100}%` }}
+                />
+              </div>
+              <span className="text-sm font-medium w-8 text-right">{stage.count}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
