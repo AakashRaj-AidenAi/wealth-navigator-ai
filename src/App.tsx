@@ -22,6 +22,7 @@ import Copilot from "./pages/Copilot";
 import Tasks from "./pages/Tasks";
 import Leads from "./pages/Leads";
 import Communications from "./pages/Communications";
+import CorporateActions from "./pages/CorporateActions";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -65,6 +66,7 @@ const AppRoutes = () => (
     <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
     <Route path="/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
     <Route path="/communications" element={<ProtectedRoute><Communications /></ProtectedRoute>} />
+    <Route path="/corporate-actions" element={<ProtectedRoute><CorporateActions /></ProtectedRoute>} />
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
     <Route path="*" element={<NotFound />} />
   </Routes>
