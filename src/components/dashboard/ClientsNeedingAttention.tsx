@@ -9,186 +9,121 @@ import { formatCurrency } from '@/lib/currency';
 import { cn } from '@/lib/utils';
 import { 
   ChevronRight, 
-  AlertTriangle, 
   Calendar, 
   FileWarning,
   Gift,
-  Clock
+  Clock,
+  Phone,
+  TrendingDown,
+  Target,
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
+import { toast } from 'sonner';
 
-interface AttentionClient {
+interface PrioritizedClient {
   id: string;
   client_name: string;
   total_assets: number | null;
+  priority_score: number;
   reason: string;
-  reasonType: 'kyc' | 'birthday' | 'review' | 'goal' | 'order';
-  priority: 'high' | 'medium' | 'low';
+  suggested_action: string;
+  urgency: 'critical' | 'high' | 'medium';
 }
 
-const reasonIcons = {
-  kyc: FileWarning,
-  birthday: Gift,
-  review: Calendar,
-  goal: AlertTriangle,
-  order: Clock
+const actionIcons: Record<string, React.ElementType> = {
+  'Schedule call': Phone,
+  'Review portfolio': TrendingDown,
+  'Update KYC': FileWarning,
+  'Send birthday wishes': Gift,
+  'Process orders': Clock,
+  'Goal review meeting': Target,
 };
 
-const priorityColors = {
-  high: 'bg-destructive',
-  medium: 'bg-warning',
-  low: 'bg-primary'
+const urgencyColors = {
+  critical: 'bg-destructive text-destructive-foreground',
+  high: 'bg-warning text-warning-foreground',
+  medium: 'bg-primary/20 text-primary'
+};
+
+const urgencyBorderColors = {
+  critical: 'border-l-destructive',
+  high: 'border-l-warning',
+  medium: 'border-l-primary'
 };
 
 export const ClientsNeedingAttention = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [clients, setClients] = useState<AttentionClient[]>([]);
+  const [clients, setClients] = useState<PrioritizedClient[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    if (user) fetchClientsNeedingAttention();
+    if (user) fetchPrioritizedClients();
   }, [user]);
 
-  const fetchClientsNeedingAttention = async () => {
+  const fetchPrioritizedClients = async (showToast = false) => {
     if (!user) return;
 
-    const today = new Date();
-    const in7Days = new Date(today);
-    in7Days.setDate(today.getDate() + 7);
-    const todayStr = today.toISOString().split('T')[0];
-    const in7DaysStr = in7Days.toISOString().split('T')[0];
-
-    // Fetch clients with various attention needs
-    const { data: clientsData } = await supabase
-      .from('clients')
-      .select('id, client_name, total_assets, kyc_expiry_date, date_of_birth, anniversary_date')
-      .eq('advisor_id', user.id);
-
-    const { data: pendingOrders } = await supabase
-      .from('orders')
-      .select('client_id, clients(id, client_name, total_assets)')
-      .eq('status', 'pending');
-
-    const { data: behindGoals } = await supabase
-      .from('goals')
-      .select('client_id, clients(id, client_name, total_assets), current_amount, target_amount')
-      .lt('status', 'completed');
-
-    const attentionClients: AttentionClient[] = [];
-
-    if (clientsData) {
-      clientsData.forEach(client => {
-        // KYC expiring soon
-        if (client.kyc_expiry_date) {
-          const kycDate = new Date(client.kyc_expiry_date);
-          if (kycDate <= in7Days) {
-            const isExpired = kycDate < today;
-            attentionClients.push({
-              id: client.id,
-              client_name: client.client_name,
-              total_assets: client.total_assets,
-              reason: isExpired ? 'KYC expired' : 'KYC expiring soon',
-              reasonType: 'kyc',
-              priority: isExpired ? 'high' : 'medium'
-            });
-          }
-        }
-
-        // Birthday today or this week
-        if (client.date_of_birth) {
-          const dob = new Date(client.date_of_birth);
-          const thisYearBirthday = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
-          if (thisYearBirthday.toISOString().split('T')[0] === todayStr) {
-            attentionClients.push({
-              id: client.id,
-              client_name: client.client_name,
-              total_assets: client.total_assets,
-              reason: 'Birthday today! 🎂',
-              reasonType: 'birthday',
-              priority: 'medium'
-            });
-          } else if (thisYearBirthday >= today && thisYearBirthday <= in7Days) {
-            attentionClients.push({
-              id: client.id,
-              client_name: client.client_name,
-              total_assets: client.total_assets,
-              reason: `Birthday on ${thisYearBirthday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
-              reasonType: 'birthday',
-              priority: 'low'
-            });
-          }
-        }
-      });
-    }
-
-    // Pending orders
-    if (pendingOrders) {
-      const clientsWithOrders = new Set<string>();
-      pendingOrders.forEach(order => {
-        if (order.clients && !clientsWithOrders.has(order.clients.id)) {
-          clientsWithOrders.add(order.clients.id);
-          attentionClients.push({
-            id: order.clients.id,
-            client_name: order.clients.client_name,
-            total_assets: order.clients.total_assets,
-            reason: 'Has pending orders',
-            reasonType: 'order',
-            priority: 'high'
-          });
-        }
-      });
-    }
-
-    // Goals behind schedule
-    if (behindGoals) {
-      const clientsWithGoalIssues = new Set<string>();
-      behindGoals.forEach(goal => {
-        if (goal.clients && !clientsWithGoalIssues.has(goal.clients.id)) {
-          const progress = (Number(goal.current_amount) / Number(goal.target_amount)) * 100;
-          if (progress < 40) {
-            clientsWithGoalIssues.add(goal.clients.id);
-            attentionClients.push({
-              id: goal.clients.id,
-              client_name: goal.clients.client_name,
-              total_assets: goal.clients.total_assets,
-              reason: 'Goal behind schedule',
-              reasonType: 'goal',
-              priority: 'medium'
-            });
-          }
-        }
-      });
-    }
-
-    // Sort by priority and deduplicate
-    const uniqueClients = attentionClients.reduce((acc, client) => {
-      const existing = acc.find(c => c.id === client.id);
-      if (!existing || priorityOrder[client.priority] < priorityOrder[existing.priority]) {
-        return [...acc.filter(c => c.id !== client.id), client];
+    try {
+      if (showToast) setRefreshing(true);
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setLoading(false);
+        return;
       }
-      return acc;
-    }, [] as AttentionClient[]);
 
-    const sorted = uniqueClients.sort((a, b) => 
-      priorityOrder[a.priority] - priorityOrder[b.priority]
-    ).slice(0, 5);
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/smart-prioritization`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+        }
+      );
 
-    setClients(sorted);
-    setLoading(false);
+      if (!response.ok) {
+        throw new Error('Failed to fetch prioritized clients');
+      }
+
+      const data = await response.json();
+      setClients(data.prioritized_clients || []);
+      
+      if (showToast) {
+        toast.success('Client priorities refreshed');
+      }
+    } catch (error) {
+      console.error('Error fetching prioritized clients:', error);
+      if (showToast) {
+        toast.error('Failed to refresh priorities');
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
-  const priorityOrder = { high: 0, medium: 1, low: 2 };
+  const handleRefresh = () => {
+    fetchPrioritizedClients(true);
+  };
 
   if (loading) {
     return (
       <div className="glass rounded-xl overflow-hidden h-full flex flex-col">
         <div className="p-5 border-b border-border">
-          <Skeleton className="h-6 w-40" />
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            <Skeleton className="h-6 w-48" />
+          </div>
           <Skeleton className="h-4 w-32 mt-1" />
         </div>
         <div className="p-3 space-y-2">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-16 w-full" />
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-20 w-full" />
           ))}
         </div>
       </div>
@@ -199,15 +134,29 @@ export const ClientsNeedingAttention = () => {
     <div className="glass rounded-xl overflow-hidden h-full flex flex-col">
       <div className="p-5 border-b border-border flex-shrink-0">
         <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-semibold">Clients Needing Attention</h3>
-            <p className="text-sm text-muted-foreground">
-              {clients.length} client{clients.length !== 1 ? 's' : ''} today
-            </p>
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            <div>
+              <h3 className="font-semibold">Smart Client Priorities</h3>
+              <p className="text-sm text-muted-foreground">
+                AI-powered • {clients.length} client{clients.length !== 1 ? 's' : ''} need attention
+              </p>
+            </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => navigate('/clients')} className="text-primary">
-            View All <ChevronRight className="ml-1 h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="h-8 w-8"
+            >
+              <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/clients')} className="text-primary">
+              View All <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
       <div className="flex-1 overflow-auto p-3 space-y-2">
@@ -215,35 +164,52 @@ export const ClientsNeedingAttention = () => {
           <div className="text-center py-8 text-muted-foreground">
             <Calendar className="h-10 w-10 mx-auto mb-2 opacity-50" />
             <p className="text-sm">All clients are in good standing</p>
+            <p className="text-xs mt-1">No urgent attention needed today</p>
           </div>
         ) : (
-          clients.map((client) => {
-            const Icon = reasonIcons[client.reasonType];
+          clients.map((client, index) => {
+            const Icon = actionIcons[client.suggested_action] || Phone;
             return (
               <div
-                key={`${client.id}-${client.reasonType}`}
+                key={client.id}
                 onClick={() => navigate(`/clients/${client.id}`)}
-                className="p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors cursor-pointer group"
+                className={cn(
+                  "p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-all cursor-pointer group border-l-4",
+                  urgencyBorderColors[client.urgency]
+                )}
               >
                 <div className="flex items-start gap-3">
-                  <div className="h-8 w-8 rounded-lg bg-background/50 flex items-center justify-center flex-shrink-0">
-                    <Icon className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="h-8 w-8 rounded-lg bg-background/50 flex items-center justify-center flex-shrink-0">
+                      <Icon className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <span className="text-xs font-medium text-muted-foreground">#{index + 1}</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={cn('h-2 w-2 rounded-full', priorityColors[client.priority])} />
                       <h4 className="font-medium text-sm truncate">{client.client_name}</h4>
+                      <Badge className={cn('text-xs px-1.5 py-0', urgencyColors[client.urgency])}>
+                        {client.urgency}
+                      </Badge>
                     </div>
+                    <p className="text-xs text-muted-foreground mb-1.5">{client.reason}</p>
                     <div className="flex items-center justify-between">
-                      <p className="text-xs text-muted-foreground">{client.reason}</p>
+                      <Badge variant="outline" className="text-xs font-normal">
+                        {client.suggested_action}
+                      </Badge>
                       {client.total_assets && (
-                        <Badge variant="secondary" className="text-xs">
+                        <span className="text-xs text-muted-foreground">
                           {formatCurrency(client.total_assets, true)}
-                        </Badge>
+                        </span>
                       )}
                     </div>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="text-xs font-semibold text-primary">
+                      {client.priority_score}
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
                 </div>
               </div>
             );
