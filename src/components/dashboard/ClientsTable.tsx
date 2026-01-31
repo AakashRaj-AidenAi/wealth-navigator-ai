@@ -122,7 +122,7 @@ export const ClientsTable = () => {
                 <tr
                   key={client.id}
                   className="hover:bg-muted/20 transition-colors cursor-pointer group"
-                  onClick={() => navigate('/clients')}
+                  onClick={() => navigate(`/clients/${client.id}`)}
                 >
                   <td className="py-4 px-5">
                     <div className="flex items-center gap-3">

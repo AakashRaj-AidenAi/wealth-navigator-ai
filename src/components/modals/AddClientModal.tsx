@@ -49,7 +49,8 @@ export const AddClientModal = ({ open, onOpenChange, onSuccess }: AddClientModal
 
     setLoading(true);
 
-    const { error } = await supabase
+    // Create client
+    const { data: newClient, error } = await supabase
       .from('clients')
       .insert({
         advisor_id: user.id,
@@ -57,8 +58,11 @@ export const AddClientModal = ({ open, onOpenChange, onSuccess }: AddClientModal
         email: email.trim() || null,
         phone: phone.trim() || null,
         total_assets: totalAssets ? parseFloat(totalAssets) : 0,
-        risk_profile: riskProfile
-      });
+        risk_profile: riskProfile,
+        status: 'onboarding' // New clients start in onboarding
+      })
+      .select()
+      .single();
 
     if (error) {
       toast({
@@ -66,15 +70,35 @@ export const AddClientModal = ({ open, onOpenChange, onSuccess }: AddClientModal
         description: error.message,
         variant: 'destructive'
       });
-    } else {
-      toast({
-        title: 'Client Added',
-        description: `${clientName} has been added successfully.`
-      });
-      resetForm();
-      onOpenChange(false);
-      onSuccess?.();
+      setLoading(false);
+      return;
     }
+
+    // Auto-create onboarding activity/task
+    if (newClient) {
+      await supabase.from('client_activities').insert({
+        client_id: newClient.id,
+        created_by: user.id,
+        activity_type: 'meeting',
+        title: 'Client Onboarding',
+        description: `Complete onboarding process for ${clientName.trim()}:\n• Collect KYC documents\n• Risk assessment questionnaire\n• Investment goals discussion\n• Portfolio recommendations`,
+        scheduled_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 1 week from now
+      });
+
+      // Add prospect tag automatically for new clients
+      await supabase.from('client_tags').insert({
+        client_id: newClient.id,
+        tag: 'prospect'
+      });
+    }
+
+    toast({
+      title: 'Client Added',
+      description: `${clientName} has been added with an onboarding task.`
+    });
+    resetForm();
+    onOpenChange(false);
+    onSuccess?.();
 
     setLoading(false);
   };
