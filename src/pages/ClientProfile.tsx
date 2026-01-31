@@ -22,6 +22,7 @@ import {
   FileText,
   Bell,
   MessageSquare,
+  Send,
   Clock,
   Gift,
   PieChart,
@@ -38,6 +39,7 @@ import { ClientRemindersTab } from '@/components/clients/ClientRemindersTab';
 import { ClientNotesTab } from '@/components/clients/ClientNotesTab';
 import { ClientPortfolioTab } from '@/components/clients/ClientPortfolioTab';
 import { ClientTasksTab } from '@/components/clients/ClientTasksTab';
+import { ClientCommunicationsTab } from '@/components/clients/ClientCommunicationsTab';
 import { EditClientModal } from '@/components/modals/EditClientModal';
 import { QuickNoteModal } from '@/components/clients/QuickNoteModal';
 
@@ -325,6 +327,10 @@ const ClientProfile = () => {
               <MessageSquare className="h-4 w-4" />
               Notes
             </TabsTrigger>
+            <TabsTrigger value="communications" className="gap-2">
+              <Send className="h-4 w-4" />
+              Communications
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -359,6 +365,9 @@ const ClientProfile = () => {
           </TabsContent>
           <TabsContent value="notes">
             <ClientNotesTab clientId={client.id} />
+          </TabsContent>
+          <TabsContent value="communications">
+            <ClientCommunicationsTab clientId={client.id} />
           </TabsContent>
         </Tabs>
       </div>
