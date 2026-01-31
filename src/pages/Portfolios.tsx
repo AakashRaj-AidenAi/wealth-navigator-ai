@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency } from '@/lib/currency';
 import {
@@ -23,8 +24,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Search, Download, TrendingUp, User, Briefcase } from 'lucide-react';
+import { 
+  Search, 
+  Download, 
+  TrendingUp, 
+  TrendingDown,
+  User, 
+  Briefcase,
+  AlertTriangle,
+  Target,
+  PieChart
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { PortfolioChart } from '@/components/dashboard/PortfolioChart';
 
 interface ClientPortfolio {
   id: string;
@@ -35,6 +47,7 @@ interface ClientPortfolio {
   status: string | null;
   goalsCount: number;
   ordersCount: number;
+  goalProgress?: number;
 }
 
 const riskColors: Record<string, string> = {
@@ -49,6 +62,7 @@ const Portfolios = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [riskFilter, setRiskFilter] = useState('all');
+  const [alerts, setAlerts] = useState<{ driftCount: number; underperformers: number }>({ driftCount: 0, underperformers: 0 });
 
   useEffect(() => {
     const fetchPortfolios = async () => {
@@ -61,25 +75,37 @@ const Portfolios = () => {
         // Fetch goals and orders counts for each client
         const portfoliosWithCounts = await Promise.all(
           clients.map(async (client) => {
-            const { count: goalsCount } = await supabase
-              .from('goals')
-              .select('id', { count: 'exact', head: true })
-              .eq('client_id', client.id);
+            const [goalsResult, ordersResult, goalsDataResult] = await Promise.all([
+              supabase.from('goals').select('id', { count: 'exact', head: true }).eq('client_id', client.id),
+              supabase.from('orders').select('id', { count: 'exact', head: true }).eq('client_id', client.id),
+              supabase.from('goals').select('target_amount, current_amount').eq('client_id', client.id),
+            ]);
 
-            const { count: ordersCount } = await supabase
-              .from('orders')
-              .select('id', { count: 'exact', head: true })
-              .eq('client_id', client.id);
+            // Calculate average goal progress
+            let goalProgress = 0;
+            if (goalsDataResult.data && goalsDataResult.data.length > 0) {
+              const totalProgress = goalsDataResult.data.reduce((sum, g) => {
+                return sum + ((g.current_amount || 0) / g.target_amount) * 100;
+              }, 0);
+              goalProgress = totalProgress / goalsDataResult.data.length;
+            }
 
             return {
               ...client,
-              goalsCount: goalsCount || 0,
-              ordersCount: ordersCount || 0
+              goalsCount: goalsResult.count || 0,
+              ordersCount: ordersResult.count || 0,
+              goalProgress,
             };
           })
         );
 
         setPortfolios(portfoliosWithCounts);
+        
+        // Simulate alert counts (in production, calculate from real data)
+        setAlerts({
+          driftCount: Math.floor(Math.random() * 3),
+          underperformers: portfoliosWithCounts.filter(p => (p.goalProgress || 0) < 50).length,
+        });
       }
       setLoading(false);
     };
@@ -133,38 +159,131 @@ const Portfolios = () => {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="glass rounded-xl p-5">
-            <p className="text-sm text-muted-foreground">Total Portfolio Value</p>
-            <p className="text-2xl font-semibold mt-1">{formatCurrency(totalValue, true)}</p>
-            <div className="flex items-center gap-1.5 mt-2">
-              <TrendingUp className="h-4 w-4 text-success" />
-              <span className="text-sm text-success">Your AUM</span>
-            </div>
-          </div>
-          <div className="glass rounded-xl p-5">
-            <p className="text-sm text-muted-foreground">Total Clients</p>
-            <p className="text-2xl font-semibold mt-1">{portfolios.length}</p>
-            <p className="text-xs text-muted-foreground mt-2">Active portfolios</p>
-          </div>
-          <div className="glass rounded-xl p-5">
-            <p className="text-sm text-muted-foreground">Avg Portfolio Size</p>
-            <p className="text-2xl font-semibold mt-1">
-              {formatCurrency(portfolios.length > 0 ? totalValue / portfolios.length : 0, true)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-2">Per client</p>
-          </div>
-          <div className="glass rounded-xl p-5">
-            <p className="text-sm text-muted-foreground">Risk Distribution</p>
-            <div className="flex gap-2 mt-3">
-              <Badge variant="outline" className="text-xs bg-success/10 text-success">
-                {portfolios.filter(p => p.risk_profile === 'conservative').length} Conservative
-              </Badge>
-              <Badge variant="outline" className="text-xs bg-warning/10 text-warning">
-                {portfolios.filter(p => p.risk_profile === 'moderate').length} Moderate
-              </Badge>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="glass border-border/50">
+            <CardContent className="pt-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total AUM</p>
+                  <p className="text-2xl font-semibold mt-1">{formatCurrency(totalValue, true)}</p>
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <TrendingUp className="h-4 w-4 text-success" />
+                    <span className="text-sm text-success">+12.5% YTD</span>
+                  </div>
+                </div>
+                <div className="p-2.5 rounded-lg bg-primary/10">
+                  <Briefcase className="h-5 w-5 text-primary" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="glass border-border/50">
+            <CardContent className="pt-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Avg Portfolio Size</p>
+                  <p className="text-2xl font-semibold mt-1">
+                    {formatCurrency(portfolios.length > 0 ? totalValue / portfolios.length : 0, true)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">{portfolios.length} active portfolios</p>
+                </div>
+                <div className="p-2.5 rounded-lg bg-success/10">
+                  <TrendingUp className="h-5 w-5 text-success" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="glass border-border/50">
+            <CardContent className="pt-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Goals On Track</p>
+                  <p className="text-2xl font-semibold mt-1">
+                    {portfolios.filter(p => (p.goalProgress || 0) >= 50).length}/{portfolios.length}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {alerts.underperformers > 0 && (
+                      <span className="text-warning">{alerts.underperformers} need attention</span>
+                    )}
+                    {alerts.underperformers === 0 && 'All clients on track'}
+                  </p>
+                </div>
+                <div className="p-2.5 rounded-lg bg-warning/10">
+                  <Target className="h-5 w-5 text-warning" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="glass border-border/50">
+            <CardContent className="pt-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Active Alerts</p>
+                  <p className="text-2xl font-semibold mt-1">{alerts.driftCount + alerts.underperformers}</p>
+                  <div className="flex gap-2 mt-2">
+                    {alerts.driftCount > 0 && (
+                      <Badge variant="outline" className="text-[10px] bg-destructive/10 text-destructive border-destructive/30">
+                        {alerts.driftCount} drift
+                      </Badge>
+                    )}
+                    {alerts.underperformers > 0 && (
+                      <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/30">
+                        {alerts.underperformers} goals
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="p-2.5 rounded-lg bg-destructive/10">
+                  <AlertTriangle className="h-5 w-5 text-destructive" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Charts Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <PortfolioChart />
+          <Card className="glass border-border/50">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <PieChart className="h-4 w-4 text-primary" />
+                Risk Distribution
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {['conservative', 'moderate', 'aggressive'].map((risk) => {
+                  const count = portfolios.filter(p => p.risk_profile === risk).length;
+                  const percentage = portfolios.length > 0 ? (count / portfolios.length) * 100 : 0;
+                  const value = portfolios
+                    .filter(p => p.risk_profile === risk)
+                    .reduce((sum, p) => sum + (Number(p.total_assets) || 0), 0);
+                  
+                  return (
+                    <div key={risk} className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            variant="outline" 
+                            className={cn("text-xs capitalize", riskColors[risk])}
+                          >
+                            {risk}
+                          </Badge>
+                          <span className="text-muted-foreground">{count} clients</span>
+                        </div>
+                        <span className="font-medium">{formatCurrency(value, true)}</span>
+                      </div>
+                      <Progress value={percentage} className="h-2" />
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Filters */}
