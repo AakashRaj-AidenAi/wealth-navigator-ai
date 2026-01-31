@@ -21,6 +21,7 @@ import Settings from "./pages/Settings";
 import Copilot from "./pages/Copilot";
 import Tasks from "./pages/Tasks";
 import Leads from "./pages/Leads";
+import Communications from "./pages/Communications";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -63,6 +64,7 @@ const AppRoutes = () => (
     <Route path="/copilot" element={<ProtectedRoute><Copilot /></ProtectedRoute>} />
     <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
     <Route path="/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
+    <Route path="/communications" element={<ProtectedRoute><Communications /></ProtectedRoute>} />
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
     <Route path="*" element={<NotFound />} />
   </Routes>

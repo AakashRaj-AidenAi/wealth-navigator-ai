@@ -100,6 +100,57 @@ export type Database = {
         }
         Relationships: []
       }
+      campaign_recipients: {
+        Row: {
+          campaign_id: string
+          client_id: string
+          created_at: string
+          delivered_at: string | null
+          error_message: string | null
+          id: string
+          opened_at: string | null
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          campaign_id: string
+          client_id: string
+          created_at?: string
+          delivered_at?: string | null
+          error_message?: string | null
+          id?: string
+          opened_at?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          campaign_id?: string
+          client_id?: string
+          created_at?: string
+          delivered_at?: string | null
+          error_message?: string | null
+          id?: string
+          opened_at?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_recipients_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "communication_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_recipients_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_activities: {
         Row: {
           activity_type: Database["public"]["Enums"]["activity_type"]
@@ -574,49 +625,146 @@ export type Database = {
         }
         Relationships: []
       }
+      communication_campaigns: {
+        Row: {
+          channel: string
+          completed_at: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          failed_count: number | null
+          id: string
+          name: string
+          scheduled_at: string | null
+          sent_count: number | null
+          started_at: string | null
+          status: string
+          target_filter: Json | null
+          template_id: string | null
+          total_recipients: number | null
+          updated_at: string
+        }
+        Insert: {
+          channel?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          failed_count?: number | null
+          id?: string
+          name: string
+          scheduled_at?: string | null
+          sent_count?: number | null
+          started_at?: string | null
+          status?: string
+          target_filter?: Json | null
+          template_id?: string | null
+          total_recipients?: number | null
+          updated_at?: string
+        }
+        Update: {
+          channel?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          failed_count?: number | null
+          id?: string
+          name?: string
+          scheduled_at?: string | null
+          sent_count?: number | null
+          started_at?: string | null
+          status?: string
+          target_filter?: Json | null
+          template_id?: string | null
+          total_recipients?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "communication_campaigns_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "message_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       communication_logs: {
         Row: {
           attachments: Json | null
+          campaign_id: string | null
           client_id: string
           communication_type: string
           content: string | null
           created_at: string
+          delivered_at: string | null
           direction: string
           id: string
+          metadata: Json | null
+          opened_at: string | null
           sent_at: string
           sent_by: string
+          status: string | null
           subject: string | null
+          template_id: string | null
         }
         Insert: {
           attachments?: Json | null
+          campaign_id?: string | null
           client_id: string
           communication_type: string
           content?: string | null
           created_at?: string
+          delivered_at?: string | null
           direction?: string
           id?: string
+          metadata?: Json | null
+          opened_at?: string | null
           sent_at?: string
           sent_by: string
+          status?: string | null
           subject?: string | null
+          template_id?: string | null
         }
         Update: {
           attachments?: Json | null
+          campaign_id?: string | null
           client_id?: string
           communication_type?: string
           content?: string | null
           created_at?: string
+          delivered_at?: string | null
           direction?: string
           id?: string
+          metadata?: Json | null
+          opened_at?: string | null
           sent_at?: string
           sent_by?: string
+          status?: string | null
           subject?: string | null
+          template_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "communication_logs_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "communication_campaigns"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "communication_logs_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "communication_logs_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "message_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -820,6 +968,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      message_templates: {
+        Row: {
+          category: string
+          channel: string
+          content: string
+          created_at: string
+          created_by: string
+          id: string
+          is_active: boolean | null
+          name: string
+          subject: string | null
+          updated_at: string
+          variables: string[] | null
+        }
+        Insert: {
+          category: string
+          channel?: string
+          content: string
+          created_at?: string
+          created_by: string
+          id?: string
+          is_active?: boolean | null
+          name: string
+          subject?: string | null
+          updated_at?: string
+          variables?: string[] | null
+        }
+        Update: {
+          category?: string
+          channel?: string
+          content?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          subject?: string | null
+          updated_at?: string
+          variables?: string[] | null
+        }
+        Relationships: []
       }
       orders: {
         Row: {
