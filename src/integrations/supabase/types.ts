@@ -14,6 +14,92 @@ export type Database = {
   }
   public: {
     Tables: {
+      advice_records: {
+        Row: {
+          acknowledged_at: string | null
+          advice_type: string
+          advisor_id: string
+          client_acknowledged: boolean | null
+          client_id: string
+          created_at: string
+          id: string
+          rationale: string | null
+          recommendation: string
+          risk_considerations: string | null
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          advice_type: string
+          advisor_id: string
+          client_acknowledged?: boolean | null
+          client_id: string
+          created_at?: string
+          id?: string
+          rationale?: string | null
+          recommendation: string
+          risk_considerations?: string | null
+        }
+        Update: {
+          acknowledged_at?: string | null
+          advice_type?: string
+          advisor_id?: string
+          client_acknowledged?: boolean | null
+          client_id?: string
+          created_at?: string
+          id?: string
+          rationale?: string | null
+          recommendation?: string
+          risk_considerations?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advice_records_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_logs: {
+        Row: {
+          action: string
+          changed_at: string
+          changed_by: string | null
+          id: string
+          ip_address: string | null
+          new_data: Json | null
+          old_data: Json | null
+          record_id: string
+          table_name: string
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          ip_address?: string | null
+          new_data?: Json | null
+          old_data?: Json | null
+          record_id: string
+          table_name: string
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          ip_address?: string | null
+          new_data?: Json | null
+          old_data?: Json | null
+          record_id?: string
+          table_name?: string
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       client_activities: {
         Row: {
           activity_type: Database["public"]["Enums"]["activity_type"]
@@ -54,6 +140,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "client_activities_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_consents: {
+        Row: {
+          client_id: string
+          consent_type: Database["public"]["Enums"]["consent_type"]
+          created_at: string
+          document_version: string | null
+          expires_at: string | null
+          id: string
+          ip_address: string | null
+          signed_at: string | null
+          status: Database["public"]["Enums"]["consent_status"]
+          updated_at: string
+          user_agent: string | null
+        }
+        Insert: {
+          client_id: string
+          consent_type: Database["public"]["Enums"]["consent_type"]
+          created_at?: string
+          document_version?: string | null
+          expires_at?: string | null
+          id?: string
+          ip_address?: string | null
+          signed_at?: string | null
+          status?: Database["public"]["Enums"]["consent_status"]
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Update: {
+          client_id?: string
+          consent_type?: Database["public"]["Enums"]["consent_type"]
+          created_at?: string
+          document_version?: string | null
+          expires_at?: string | null
+          id?: string
+          ip_address?: string | null
+          signed_at?: string | null
+          status?: Database["public"]["Enums"]["consent_status"]
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_consents_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
@@ -437,6 +573,100 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      communication_logs: {
+        Row: {
+          attachments: Json | null
+          client_id: string
+          communication_type: string
+          content: string | null
+          created_at: string
+          direction: string
+          id: string
+          sent_at: string
+          sent_by: string
+          subject: string | null
+        }
+        Insert: {
+          attachments?: Json | null
+          client_id: string
+          communication_type: string
+          content?: string | null
+          created_at?: string
+          direction?: string
+          id?: string
+          sent_at?: string
+          sent_by: string
+          subject?: string | null
+        }
+        Update: {
+          attachments?: Json | null
+          client_id?: string
+          communication_type?: string
+          content?: string | null
+          created_at?: string
+          direction?: string
+          id?: string
+          sent_at?: string
+          sent_by?: string
+          subject?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "communication_logs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      compliance_alerts: {
+        Row: {
+          alert_type: string
+          client_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_resolved: boolean | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          title: string
+        }
+        Insert: {
+          alert_type: string
+          client_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_resolved?: boolean | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          title: string
+        }
+        Update: {
+          alert_type?: string
+          client_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_resolved?: boolean | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compliance_alerts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       goals: {
         Row: {
@@ -842,6 +1072,15 @@ export type Database = {
         | "dormant"
         | "vip"
         | "nri"
+      consent_status: "pending" | "signed" | "expired" | "revoked"
+      consent_type:
+        | "risk_disclosure"
+        | "investment_policy"
+        | "data_privacy"
+        | "fee_agreement"
+        | "kyc_authorization"
+        | "portfolio_discretion"
+        | "electronic_delivery"
       document_type:
         | "kyc"
         | "agreement"
@@ -1031,6 +1270,16 @@ export const Constants = {
         "dormant",
         "vip",
         "nri",
+      ],
+      consent_status: ["pending", "signed", "expired", "revoked"],
+      consent_type: [
+        "risk_disclosure",
+        "investment_policy",
+        "data_privacy",
+        "fee_agreement",
+        "kyc_authorization",
+        "portfolio_discretion",
+        "electronic_delivery",
       ],
       document_type: [
         "kyc",

@@ -2,17 +2,15 @@ import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Shield, AlertTriangle, CheckCircle2, Clock, FileCheck, Eye } from 'lucide-react';
+import { Shield, FileCheck } from 'lucide-react';
 import { GenerateReportModal } from '@/components/modals/GenerateReportModal';
 import { useAuth } from '@/contexts/AuthContext';
-
-const complianceItems = [
-  { id: 1, title: 'KYC Document Expiry - Harrison Trust', type: 'Document', priority: 'high', dueDate: 'Feb 5, 2025', status: 'pending' },
-  { id: 2, title: 'Quarterly AML Review - All Clients', type: 'Review', priority: 'medium', dueDate: 'Feb 15, 2025', status: 'in-progress' },
-  { id: 3, title: 'Trade Surveillance Alert - Large Transaction', type: 'Alert', priority: 'high', dueDate: 'Today', status: 'pending' },
-  { id: 4, title: 'Suitability Assessment - New Account', type: 'Assessment', priority: 'medium', dueDate: 'Feb 10, 2025', status: 'pending' },
-  { id: 5, title: 'Annual Compliance Training', type: 'Training', priority: 'low', dueDate: 'Mar 1, 2025', status: 'scheduled' },
-];
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ComplianceAlerts } from '@/components/compliance/ComplianceAlerts';
+import { AuditTrailViewer } from '@/components/compliance/AuditTrailViewer';
+import { ConsentManager } from '@/components/compliance/ConsentManager';
+import { AdviceRecordsList } from '@/components/compliance/AdviceRecordsList';
+import { CommunicationLogs } from '@/components/compliance/CommunicationLogs';
 
 const Compliance = () => {
   const { role } = useAuth();
@@ -28,7 +26,7 @@ const Compliance = () => {
           <div>
             <h1 className="text-2xl font-semibold">Compliance Center</h1>
             <p className="text-muted-foreground">
-              Monitor regulatory compliance, alerts, and audit requirements
+              Monitor regulatory compliance, audit trail, and client consents
             </p>
           </div>
           {canGenerateReport && (
@@ -51,7 +49,7 @@ const Compliance = () => {
               </div>
               <div>
                 <h2 className="font-semibold text-lg">Overall Compliance Score</h2>
-                <p className="text-sm text-muted-foreground">Based on 24 compliance factors</p>
+                <p className="text-sm text-muted-foreground">Based on audit readiness factors</p>
               </div>
             </div>
             <div className="text-right">
@@ -62,76 +60,36 @@ const Compliance = () => {
           <Progress value={94} className="h-3" />
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="glass rounded-xl p-5">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              <div>
-                <p className="text-sm text-muted-foreground">Critical Alerts</p>
-                <p className="text-2xl font-semibold text-destructive">2</p>
-              </div>
-            </div>
-          </div>
-          <div className="glass rounded-xl p-5">
-            <div className="flex items-center gap-3">
-              <Clock className="h-5 w-5 text-warning" />
-              <div>
-                <p className="text-sm text-muted-foreground">Pending Reviews</p>
-                <p className="text-2xl font-semibold text-warning">5</p>
-              </div>
-            </div>
-          </div>
-          <div className="glass rounded-xl p-5">
-            <div className="flex items-center gap-3">
-              <CheckCircle2 className="h-5 w-5 text-success" />
-              <div>
-                <p className="text-sm text-muted-foreground">Completed This Month</p>
-                <p className="text-2xl font-semibold">18</p>
-              </div>
-            </div>
-          </div>
-          <div className="glass rounded-xl p-5">
-            <div className="flex items-center gap-3">
-              <Eye className="h-5 w-5 text-primary" />
-              <div>
-                <p className="text-sm text-muted-foreground">Audit Trail Items</p>
-                <p className="text-2xl font-semibold">1,247</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Tabbed Content */}
+        <Tabs defaultValue="alerts" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-flex">
+            <TabsTrigger value="alerts">Alerts</TabsTrigger>
+            <TabsTrigger value="consents">Consents</TabsTrigger>
+            <TabsTrigger value="advice">Advice Records</TabsTrigger>
+            <TabsTrigger value="communications">Communications</TabsTrigger>
+            <TabsTrigger value="audit">Audit Trail</TabsTrigger>
+          </TabsList>
 
-        {/* Compliance Items */}
-        <div className="glass rounded-xl p-6">
-          <h2 className="font-semibold mb-4">Action Items</h2>
-          <div className="space-y-3">
-            {complianceItems.map((item) => (
-              <div 
-                key={item.id} 
-                className="flex items-center justify-between p-4 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors cursor-pointer"
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`h-2 w-2 rounded-full ${
-                    item.priority === 'high' ? 'bg-destructive' :
-                    item.priority === 'medium' ? 'bg-warning' : 'bg-muted-foreground'
-                  }`} />
-                  <div>
-                    <p className="font-medium">{item.title}</p>
-                    <p className="text-sm text-muted-foreground">{item.type} • Due: {item.dueDate}</p>
-                  </div>
-                </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                  item.status === 'pending' ? 'bg-warning/20 text-warning' :
-                  item.status === 'in-progress' ? 'bg-primary/20 text-primary' :
-                  'bg-muted text-muted-foreground'
-                }`}>
-                  {item.status === 'in-progress' ? 'In Progress' : item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+          <TabsContent value="alerts">
+            <ComplianceAlerts />
+          </TabsContent>
+
+          <TabsContent value="consents">
+            <ConsentManager />
+          </TabsContent>
+
+          <TabsContent value="advice">
+            <AdviceRecordsList />
+          </TabsContent>
+
+          <TabsContent value="communications">
+            <CommunicationLogs />
+          </TabsContent>
+
+          <TabsContent value="audit">
+            <AuditTrailViewer />
+          </TabsContent>
+        </Tabs>
       </div>
 
       <GenerateReportModal 
