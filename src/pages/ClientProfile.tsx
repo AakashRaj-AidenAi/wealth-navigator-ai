@@ -27,7 +27,8 @@ import {
   Gift,
   PieChart,
   CheckSquare,
-  StickyNote
+  StickyNote,
+  Landmark
 } from 'lucide-react';
 
 import { ClientOverviewTab } from '@/components/clients/ClientOverviewTab';
@@ -40,6 +41,7 @@ import { ClientNotesTab } from '@/components/clients/ClientNotesTab';
 import { ClientPortfolioTab } from '@/components/clients/ClientPortfolioTab';
 import { ClientTasksTab } from '@/components/clients/ClientTasksTab';
 import { ClientCommunicationsTab } from '@/components/clients/ClientCommunicationsTab';
+import { ClientCorporateActionsTab } from '@/components/clients/ClientCorporateActionsTab';
 import { EditClientModal } from '@/components/modals/EditClientModal';
 import { QuickNoteModal } from '@/components/clients/QuickNoteModal';
 
@@ -331,6 +333,10 @@ const ClientProfile = () => {
               <Send className="h-4 w-4" />
               Communications
             </TabsTrigger>
+            <TabsTrigger value="corporate-actions" className="gap-2">
+              <Landmark className="h-4 w-4" />
+              Corp Actions
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -368,6 +374,9 @@ const ClientProfile = () => {
           </TabsContent>
           <TabsContent value="communications">
             <ClientCommunicationsTab clientId={client.id} />
+          </TabsContent>
+          <TabsContent value="corporate-actions">
+            <ClientCorporateActionsTab clientId={client.id} />
           </TabsContent>
         </Tabs>
       </div>

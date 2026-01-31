@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.smart-prioritization]
 verify_jwt = false
+
+[functions.corporate-actions]
+verify_jwt = false

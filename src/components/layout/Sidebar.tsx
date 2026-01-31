@@ -18,6 +18,7 @@ import {
   CheckSquare,
   UserPlus,
   Send,
+  Landmark,
 } from 'lucide-react';
 
 interface NavItem {
@@ -35,6 +36,7 @@ const mainNavItems: NavItem[] = [
   { label: 'Portfolios', icon: Briefcase, href: '/portfolios' },
   { label: 'Goals & Planning', icon: Target, href: '/goals' },
   { label: 'CIO Desk', icon: TrendingUp, href: '/cio' },
+  { label: 'Corp Actions', icon: Landmark, href: '/corporate-actions' },
   { label: 'Orders', icon: FileCheck, href: '/orders', badge: 3 },
   { label: 'Communications', icon: Send, href: '/communications' },
   { label: 'Compliance', icon: Shield, href: '/compliance', badge: 2 },

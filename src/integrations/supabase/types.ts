@@ -248,6 +248,76 @@ export type Database = {
           },
         ]
       }
+      client_corporate_actions: {
+        Row: {
+          advisor_id: string
+          ai_personalized_summary: string | null
+          client_id: string
+          corporate_action_id: string
+          created_at: string | null
+          estimated_impact: number | null
+          holdings_quantity: number
+          id: string
+          is_notified: boolean | null
+          notified_at: string | null
+          task_created: boolean | null
+          task_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          advisor_id: string
+          ai_personalized_summary?: string | null
+          client_id: string
+          corporate_action_id: string
+          created_at?: string | null
+          estimated_impact?: number | null
+          holdings_quantity?: number
+          id?: string
+          is_notified?: boolean | null
+          notified_at?: string | null
+          task_created?: boolean | null
+          task_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          advisor_id?: string
+          ai_personalized_summary?: string | null
+          client_id?: string
+          corporate_action_id?: string
+          created_at?: string | null
+          estimated_impact?: number | null
+          holdings_quantity?: number
+          id?: string
+          is_notified?: boolean | null
+          notified_at?: string | null
+          task_created?: boolean | null
+          task_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_corporate_actions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_corporate_actions_corporate_action_id_fkey"
+            columns: ["corporate_action_id"]
+            isOneToOne: false
+            referencedRelation: "corporate_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_corporate_actions_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_documents: {
         Row: {
           client_id: string
@@ -833,6 +903,116 @@ export type Database = {
           },
         ]
       }
+      corporate_action_alerts: {
+        Row: {
+          advisor_id: string
+          corporate_action_id: string
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          message: string | null
+          read_at: string | null
+          severity: string | null
+          title: string
+        }
+        Insert: {
+          advisor_id: string
+          corporate_action_id: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message?: string | null
+          read_at?: string | null
+          severity?: string | null
+          title: string
+        }
+        Update: {
+          advisor_id?: string
+          corporate_action_id?: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message?: string | null
+          read_at?: string | null
+          severity?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "corporate_action_alerts_corporate_action_id_fkey"
+            columns: ["corporate_action_id"]
+            isOneToOne: false
+            referencedRelation: "corporate_actions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      corporate_actions: {
+        Row: {
+          action_type: Database["public"]["Enums"]["corporate_action_type"]
+          ai_suggestion: string | null
+          ai_summary: string | null
+          announcement_date: string | null
+          created_at: string | null
+          currency: string | null
+          description: string | null
+          dividend_amount: number | null
+          ex_date: string | null
+          id: string
+          payment_date: string | null
+          ratio: string | null
+          raw_data: Json | null
+          record_date: string | null
+          security_name: string
+          source: string | null
+          status: Database["public"]["Enums"]["corporate_action_status"] | null
+          symbol: string
+          updated_at: string | null
+        }
+        Insert: {
+          action_type: Database["public"]["Enums"]["corporate_action_type"]
+          ai_suggestion?: string | null
+          ai_summary?: string | null
+          announcement_date?: string | null
+          created_at?: string | null
+          currency?: string | null
+          description?: string | null
+          dividend_amount?: number | null
+          ex_date?: string | null
+          id?: string
+          payment_date?: string | null
+          ratio?: string | null
+          raw_data?: Json | null
+          record_date?: string | null
+          security_name: string
+          source?: string | null
+          status?: Database["public"]["Enums"]["corporate_action_status"] | null
+          symbol: string
+          updated_at?: string | null
+        }
+        Update: {
+          action_type?: Database["public"]["Enums"]["corporate_action_type"]
+          ai_suggestion?: string | null
+          ai_summary?: string | null
+          announcement_date?: string | null
+          created_at?: string | null
+          currency?: string | null
+          description?: string | null
+          dividend_amount?: number | null
+          ex_date?: string | null
+          id?: string
+          payment_date?: string | null
+          ratio?: string | null
+          raw_data?: Json | null
+          record_date?: string | null
+          security_name?: string
+          source?: string | null
+          status?: Database["public"]["Enums"]["corporate_action_status"] | null
+          symbol?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       goals: {
         Row: {
           client_id: string
@@ -1289,6 +1469,15 @@ export type Database = {
         | "kyc_authorization"
         | "portfolio_discretion"
         | "electronic_delivery"
+      corporate_action_status: "upcoming" | "active" | "completed" | "cancelled"
+      corporate_action_type:
+        | "dividend"
+        | "bonus"
+        | "split"
+        | "rights_issue"
+        | "merger"
+        | "demerger"
+        | "buyback"
       document_type:
         | "kyc"
         | "agreement"
@@ -1488,6 +1677,16 @@ export const Constants = {
         "kyc_authorization",
         "portfolio_discretion",
         "electronic_delivery",
+      ],
+      corporate_action_status: ["upcoming", "active", "completed", "cancelled"],
+      corporate_action_type: [
+        "dividend",
+        "bonus",
+        "split",
+        "rights_issue",
+        "merger",
+        "demerger",
+        "buyback",
       ],
       document_type: [
         "kyc",
