@@ -16,7 +16,6 @@ import {
   Phone,
   Mail,
   MapPin,
-  Calendar,
   Edit,
   Users,
   Target,
@@ -25,7 +24,9 @@ import {
   MessageSquare,
   Clock,
   Gift,
-  Shield
+  PieChart,
+  CheckSquare,
+  StickyNote
 } from 'lucide-react';
 
 import { ClientOverviewTab } from '@/components/clients/ClientOverviewTab';
@@ -35,7 +36,10 @@ import { ClientDocumentsTab } from '@/components/clients/ClientDocumentsTab';
 import { ClientActivityTab } from '@/components/clients/ClientActivityTab';
 import { ClientRemindersTab } from '@/components/clients/ClientRemindersTab';
 import { ClientNotesTab } from '@/components/clients/ClientNotesTab';
+import { ClientPortfolioTab } from '@/components/clients/ClientPortfolioTab';
+import { ClientTasksTab } from '@/components/clients/ClientTasksTab';
 import { EditClientModal } from '@/components/modals/EditClientModal';
+import { QuickNoteModal } from '@/components/clients/QuickNoteModal';
 
 interface Client {
   id: string;
@@ -92,6 +96,8 @@ const ClientProfile = () => {
   const [tags, setTags] = useState<ClientTag[]>([]);
   const [loading, setLoading] = useState(true);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [quickNoteOpen, setQuickNoteOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
 
   const fetchClient = async () => {
     if (!id) return;
@@ -210,17 +216,30 @@ const ClientProfile = () => {
                     ))}
                   </div>
                 </div>
-                {canEdit && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="ml-auto gap-2"
-                    onClick={() => setEditModalOpen(true)}
-                  >
-                    <Edit className="h-4 w-4" />
-                    Edit Profile
-                  </Button>
-                )}
+                <div className="ml-auto flex items-center gap-2">
+                  {canEdit && (
+                    <>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="gap-2"
+                        onClick={() => setQuickNoteOpen(true)}
+                      >
+                        <StickyNote className="h-4 w-4" />
+                        Quick Note
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="gap-2"
+                        onClick={() => setEditModalOpen(true)}
+                      >
+                        <Edit className="h-4 w-4" />
+                        Edit Profile
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -267,20 +286,20 @@ const ClientProfile = () => {
           </div>
         </div>
 
-        {/* Tabs */}
-        <Tabs defaultValue="overview" className="space-y-4">
+        {/* Tabs - Reorganized per user request */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="bg-secondary/50 p-1 h-auto flex-wrap">
             <TabsTrigger value="overview" className="gap-2">
               <User className="h-4 w-4" />
               Overview
             </TabsTrigger>
-            <TabsTrigger value="family" className="gap-2">
-              <Users className="h-4 w-4" />
-              Family & Nominees
+            <TabsTrigger value="portfolio" className="gap-2">
+              <PieChart className="h-4 w-4" />
+              Portfolio
             </TabsTrigger>
-            <TabsTrigger value="goals" className="gap-2">
-              <Target className="h-4 w-4" />
-              Goals
+            <TabsTrigger value="tasks" className="gap-2">
+              <CheckSquare className="h-4 w-4" />
+              Tasks
             </TabsTrigger>
             <TabsTrigger value="documents" className="gap-2">
               <FileText className="h-4 w-4" />
@@ -289,6 +308,14 @@ const ClientProfile = () => {
             <TabsTrigger value="activity" className="gap-2">
               <Clock className="h-4 w-4" />
               Activity
+            </TabsTrigger>
+            <TabsTrigger value="family" className="gap-2">
+              <Users className="h-4 w-4" />
+              Family
+            </TabsTrigger>
+            <TabsTrigger value="goals" className="gap-2">
+              <Target className="h-4 w-4" />
+              Goals
             </TabsTrigger>
             <TabsTrigger value="reminders" className="gap-2">
               <Bell className="h-4 w-4" />
@@ -303,11 +330,11 @@ const ClientProfile = () => {
           <TabsContent value="overview">
             <ClientOverviewTab client={client} tags={tags} onTagsChange={fetchClient} />
           </TabsContent>
-          <TabsContent value="family">
-            <ClientFamilyTab clientId={client.id} />
+          <TabsContent value="portfolio">
+            <ClientPortfolioTab clientId={client.id} totalAssets={Number(client.total_assets)} />
           </TabsContent>
-          <TabsContent value="goals">
-            <ClientGoalsTab clientId={client.id} />
+          <TabsContent value="tasks">
+            <ClientTasksTab clientId={client.id} />
           </TabsContent>
           <TabsContent value="documents">
             <ClientDocumentsTab clientId={client.id} />
@@ -315,8 +342,20 @@ const ClientProfile = () => {
           <TabsContent value="activity">
             <ClientActivityTab clientId={client.id} />
           </TabsContent>
+          <TabsContent value="family">
+            <ClientFamilyTab clientId={client.id} />
+          </TabsContent>
+          <TabsContent value="goals">
+            <ClientGoalsTab clientId={client.id} />
+          </TabsContent>
           <TabsContent value="reminders">
-            <ClientRemindersTab clientId={client.id} clientName={client.client_name} dateOfBirth={client.date_of_birth} anniversaryDate={client.anniversary_date} kycExpiryDate={client.kyc_expiry_date} />
+            <ClientRemindersTab 
+              clientId={client.id} 
+              clientName={client.client_name} 
+              dateOfBirth={client.date_of_birth} 
+              anniversaryDate={client.anniversary_date} 
+              kycExpiryDate={client.kyc_expiry_date} 
+            />
           </TabsContent>
           <TabsContent value="notes">
             <ClientNotesTab clientId={client.id} />
@@ -329,6 +368,17 @@ const ClientProfile = () => {
         onOpenChange={setEditModalOpen}
         client={client}
         onSuccess={fetchClient}
+      />
+
+      <QuickNoteModal
+        open={quickNoteOpen}
+        onOpenChange={setQuickNoteOpen}
+        clientId={client.id}
+        onSuccess={() => {
+          if (activeTab === 'notes') {
+            // Will be refreshed by the tab
+          }
+        }}
       />
     </MainLayout>
   );
