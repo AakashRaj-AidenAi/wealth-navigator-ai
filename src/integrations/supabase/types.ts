@@ -644,16 +644,25 @@ export type Database = {
           address: string | null
           advisor_id: string
           anniversary_date: string | null
+          authorized_person_email: string | null
+          authorized_person_name: string | null
+          authorized_person_phone: string | null
+          business_nature: string | null
+          cin_number: string | null
           client_code: string | null
           client_name: string
+          client_type: Database["public"]["Enums"]["client_type"] | null
           converted_from_lead_id: string | null
           created_at: string
           date_of_birth: string | null
           email: string | null
+          gst_number: string | null
           id: string
           kyc_expiry_date: string | null
+          legal_name: string | null
           pan_number: string | null
           phone: string | null
+          registration_date: string | null
           risk_profile: string | null
           source: string | null
           status: string | null
@@ -665,16 +674,25 @@ export type Database = {
           address?: string | null
           advisor_id: string
           anniversary_date?: string | null
+          authorized_person_email?: string | null
+          authorized_person_name?: string | null
+          authorized_person_phone?: string | null
+          business_nature?: string | null
+          cin_number?: string | null
           client_code?: string | null
           client_name: string
+          client_type?: Database["public"]["Enums"]["client_type"] | null
           converted_from_lead_id?: string | null
           created_at?: string
           date_of_birth?: string | null
           email?: string | null
+          gst_number?: string | null
           id?: string
           kyc_expiry_date?: string | null
+          legal_name?: string | null
           pan_number?: string | null
           phone?: string | null
+          registration_date?: string | null
           risk_profile?: string | null
           source?: string | null
           status?: string | null
@@ -686,16 +704,25 @@ export type Database = {
           address?: string | null
           advisor_id?: string
           anniversary_date?: string | null
+          authorized_person_email?: string | null
+          authorized_person_name?: string | null
+          authorized_person_phone?: string | null
+          business_nature?: string | null
+          cin_number?: string | null
           client_code?: string | null
           client_name?: string
+          client_type?: Database["public"]["Enums"]["client_type"] | null
           converted_from_lead_id?: string | null
           created_at?: string
           date_of_birth?: string | null
           email?: string | null
+          gst_number?: string | null
           id?: string
           kyc_expiry_date?: string | null
+          legal_name?: string | null
           pan_number?: string | null
           phone?: string | null
+          registration_date?: string | null
           risk_profile?: string | null
           source?: string | null
           status?: string | null
@@ -1545,6 +1572,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_client_duplicates: {
+        Args: {
+          p_advisor_id: string
+          p_cin_number?: string
+          p_client_name?: string
+          p_email?: string
+          p_exclude_client_id?: string
+          p_gst_number?: string
+          p_pan_number?: string
+          p_phone?: string
+        }
+        Returns: {
+          client_id: string
+          client_name: string
+          confidence_score: number
+          email: string
+          is_hard_block: boolean
+          match_type: string
+          phone: string
+        }[]
+      }
       generate_client_code: { Args: never; Returns: string }
       has_role: {
         Args: {
@@ -1557,6 +1605,8 @@ export type Database = {
       is_client_advisor: { Args: { _client_id: string }; Returns: boolean }
       is_compliance_officer: { Args: never; Returns: boolean }
       is_wealth_advisor: { Args: never; Returns: boolean }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       activity_type:
@@ -1575,6 +1625,7 @@ export type Database = {
         | "dormant"
         | "vip"
         | "nri"
+      client_type: "individual" | "entity"
       consent_status: "pending" | "signed" | "expired" | "revoked"
       consent_type:
         | "risk_disclosure"
@@ -1789,6 +1840,7 @@ export const Constants = {
         "vip",
         "nri",
       ],
+      client_type: ["individual", "entity"],
       consent_status: ["pending", "signed", "expired", "revoked"],
       consent_type: [
         "risk_disclosure",
