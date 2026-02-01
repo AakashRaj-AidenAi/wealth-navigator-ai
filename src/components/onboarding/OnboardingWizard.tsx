@@ -207,6 +207,32 @@ export const OnboardingWizard = ({ open, onOpenChange, onSuccess }: OnboardingWi
         created_by: user.id,
       });
 
+      // Create risk profiling task
+      await supabase.from('tasks').insert({
+        title: `Risk Profiling: ${data.client_name.trim()}`,
+        description: `Complete risk profiling assessment to determine client's risk appetite and recommended portfolio allocation.`,
+        priority: 'high',
+        status: 'todo',
+        due_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        client_id: newClient.id,
+        trigger_type: 'new_client',
+        trigger_reference_id: newClient.id,
+        assigned_to: user.id,
+        created_by: user.id,
+      });
+
+      // Create annual risk re-profiling reminder
+      await supabase.from('client_reminders').insert({
+        client_id: newClient.id,
+        created_by: user.id,
+        reminder_type: 'review_meeting',
+        title: 'Annual Risk Profile Review',
+        description: 'Re-assess risk profile to ensure investment strategy aligns with current financial situation and goals.',
+        reminder_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        is_recurring: true,
+        recurrence_pattern: 'yearly',
+      });
+
       // Add prospect tag
       await supabase.from('client_tags').insert({
         client_id: newClient.id,
