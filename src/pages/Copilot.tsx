@@ -262,20 +262,31 @@ const Copilot = () => {
           {/* Header */}
           <div className="px-5 py-3 border-b border-border flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-gradient-gold flex items-center justify-center">
-                <Bot className="h-4 w-4 text-primary-foreground" />
+              <div className={cn(
+                "h-9 w-9 rounded-lg bg-gradient-gold flex items-center justify-center",
+                isLoading && "animate-pulse"
+              )}>
+                <Bot className={cn("h-4 w-4 text-primary-foreground", isLoading && "animate-bounce")} />
               </div>
               <div>
                 <h2 className="font-semibold text-sm flex items-center gap-2">
                   WealthOS Copilot
-                  <Badge variant="outline" className="text-[10px] h-5 bg-success/10 text-success border-success/20">
-                    AI
-                  </Badge>
+                  {isLoading ? (
+                    <Badge variant="outline" className="text-[10px] h-5 bg-primary/10 text-primary border-primary/20 animate-pulse">
+                      Processing...
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] h-5 bg-success/10 text-success border-success/20">
+                      AI
+                    </Badge>
+                  )}
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  {selectedAgentData
-                    ? <span className={selectedAgentData.color}>{selectedAgentData.name}</span>
-                    : 'General Assistant'}
+                  {isLoading
+                    ? <span className="text-primary">Querying your data...</span>
+                    : selectedAgentData
+                      ? <span className={selectedAgentData.color}>{selectedAgentData.name}</span>
+                      : 'General Assistant'}
                 </p>
               </div>
             </div>
@@ -413,16 +424,27 @@ const Copilot = () => {
               )}
 
               {/* Loading State */}
-              {isLoading && messages[messages.length - 1]?.content === '' && (
+              {isLoading && (messages.length === 0 || messages[messages.length - 1]?.role === 'user' || messages[messages.length - 1]?.content === '') && (
                 <div className="flex gap-3">
-                  <div className="h-7 w-7 rounded-lg bg-gradient-gold flex items-center justify-center">
+                  <div className="h-7 w-7 rounded-lg bg-gradient-gold flex items-center justify-center flex-shrink-0">
                     <Bot className="h-3.5 w-3.5 text-primary-foreground" />
                   </div>
                   <div className="bg-secondary/30 rounded-xl px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Database className="h-4 w-4 text-primary animate-pulse" />
-                      <span className="text-sm text-muted-foreground">Querying your data...</span>
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        <span className="text-sm font-medium">Processing your request...</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1.5">
+                          <Database className="h-3 w-3 animate-pulse text-primary" />
+                          <span>Querying database</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Sparkles className="h-3 w-3 animate-pulse text-chart-3" />
+                          <span>Analyzing data</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
