@@ -6,6 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   Bot,
   Send,
@@ -14,7 +15,9 @@ import {
   AlertTriangle,
   Lightbulb,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Database,
+  Loader2
 } from 'lucide-react';
 
 interface Message {
@@ -233,9 +236,48 @@ export const AICopilot = ({ defaultMinimized = false }: AICopilotProps) => {
                     : 'bg-secondary'
                 )}
               >
-                <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
-                  <ReactMarkdown>{message.content}</ReactMarkdown>
-                </div>
+                {message.role === 'user' ? (
+                  <p className="text-sm">{message.content}</p>
+                ) : (
+                  <div className="text-sm">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        table: ({ children }) => (
+                          <div className="overflow-x-auto my-2 rounded border border-border">
+                            <table className="w-full text-xs">{children}</table>
+                          </div>
+                        ),
+                        thead: ({ children }) => (
+                          <thead className="bg-secondary/50 border-b border-border">{children}</thead>
+                        ),
+                        th: ({ children }) => (
+                          <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">{children}</th>
+                        ),
+                        td: ({ children }) => (
+                          <td className="px-2 py-1.5 border-b border-border/50 whitespace-nowrap">{children}</td>
+                        ),
+                        p: ({ children }) => (
+                          <p className="mb-1.5 last:mb-0">{children}</p>
+                        ),
+                        ul: ({ children }) => (
+                          <ul className="list-disc list-inside mb-1.5 space-y-0.5">{children}</ul>
+                        ),
+                        ol: ({ children }) => (
+                          <ol className="list-decimal list-inside mb-1.5 space-y-0.5">{children}</ol>
+                        ),
+                        strong: ({ children }) => (
+                          <strong className="font-semibold">{children}</strong>
+                        ),
+                        code: ({ children }) => (
+                          <code className="px-1 py-0.5 rounded bg-background text-xs">{children}</code>
+                        ),
+                      }}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -245,10 +287,10 @@ export const AICopilot = ({ defaultMinimized = false }: AICopilotProps) => {
                 <Bot className="h-4 w-4 text-primary" />
               </div>
               <div className="bg-secondary rounded-xl px-4 py-2.5">
-                <div className="flex gap-1">
-                  <span className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                <div className="flex items-center gap-2">
+                  <Database className="h-3 w-3 text-primary animate-pulse" />
+                  <span className="text-xs text-muted-foreground">Querying data...</span>
+                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                 </div>
               </div>
             </div>

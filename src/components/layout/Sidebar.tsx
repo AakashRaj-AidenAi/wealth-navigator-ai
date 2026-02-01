@@ -69,16 +69,19 @@ export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
       <div className="flex h-16 items-center justify-between px-4 border-b border-sidebar-border">
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-gradient-gold flex items-center justify-center">
-              <span className="text-sm font-bold text-primary-foreground">W</span>
-            </div>
-            <span className="font-semibold text-foreground">WealthOS</span>
+            <img
+              src="/AidenAI_Logo Blue bold-01 2.svg"
+              alt="AidenAI"
+              className="h-8 w-auto"
+            />
           </div>
         )}
         {collapsed && (
-          <div className="h-8 w-8 mx-auto rounded-lg bg-gradient-gold flex items-center justify-center">
-            <span className="text-sm font-bold text-primary-foreground">W</span>
-          </div>
+          <img
+            src="/AidenAI_Logo Blue bold-01 2.svg"
+            alt="AidenAI"
+            className="h-8 w-8 mx-auto object-contain"
+          />
         )}
       </div>
 

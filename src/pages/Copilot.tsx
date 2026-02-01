@@ -7,18 +7,22 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   Bot,
   Send,
   Sparkles,
   TrendingUp,
-  AlertTriangle,
-  Lightbulb,
   Users,
   Shield,
   Calculator,
   Calendar,
   Briefcase,
+  Database,
+  Loader2,
+  MessageSquare,
+  Trash2,
+  ChevronRight,
 } from 'lucide-react';
 
 interface Message {
@@ -34,42 +38,37 @@ interface Agent {
   description: string;
   icon: React.ElementType;
   color: string;
+  bgColor: string;
 }
 
 const agents: Agent[] = [
-  { id: 'portfolio', name: 'Portfolio Intelligence', description: 'Deep portfolio analysis & optimization', icon: Briefcase, color: 'text-primary' },
-  { id: 'cio', name: 'CIO Copilot', description: 'Investment strategy & market insights', icon: TrendingUp, color: 'text-success' },
-  { id: 'advisor', name: 'Advisor Assistant', description: 'Client recommendations & prep', icon: Users, color: 'text-chart-3' },
-  { id: 'compliance', name: 'Compliance Sentinel', description: 'Regulatory monitoring & alerts', icon: Shield, color: 'text-warning' },
-  { id: 'tax', name: 'Tax Optimizer', description: 'Tax-loss harvesting & efficiency', icon: Calculator, color: 'text-chart-4' },
-  { id: 'meeting', name: 'Meeting Intelligence', description: 'Meeting prep & action items', icon: Calendar, color: 'text-chart-5' },
+  { id: 'portfolio', name: 'Portfolio Intelligence', description: 'Deep portfolio analysis & optimization', icon: Briefcase, color: 'text-primary', bgColor: 'bg-primary/10' },
+  { id: 'cio', name: 'CIO Copilot', description: 'Investment strategy & market insights', icon: TrendingUp, color: 'text-success', bgColor: 'bg-success/10' },
+  { id: 'advisor', name: 'Advisor Assistant', description: 'Client recommendations & prep', icon: Users, color: 'text-chart-3', bgColor: 'bg-chart-3/10' },
+  { id: 'compliance', name: 'Compliance Sentinel', description: 'Regulatory monitoring & alerts', icon: Shield, color: 'text-warning', bgColor: 'bg-warning/10' },
+  { id: 'tax', name: 'Tax Optimizer', description: 'Tax-loss harvesting & efficiency', icon: Calculator, color: 'text-chart-4', bgColor: 'bg-chart-4/10' },
+  { id: 'meeting', name: 'Meeting Intelligence', description: 'Meeting prep & action items', icon: Calendar, color: 'text-chart-5', bgColor: 'bg-chart-5/10' },
 ];
 
 const samplePrompts = [
-  "Analyze concentration risk across all family office portfolios",
-  "Identify tax-loss harvesting opportunities for Q1",
-  "Prepare talking points for a client review meeting",
-  "What's the impact of recent Fed rate decisions on bond allocations?",
-  "Flag any clients approaching suitability guideline limits",
-  "Generate a market outlook summary for next week",
+  { text: "Show me my top 5 clients by AUM", icon: TrendingUp },
+  { text: "What's my total AUM across all clients?", icon: Calculator },
+  { text: "Find clients with assets over $5 million", icon: Users },
+  { text: "Show me all pending orders from last week", icon: Briefcase },
+  { text: "What are the overdue tasks I need to handle?", icon: Calendar },
+  { text: "Show risk profile distribution of my clients", icon: Shield },
 ];
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/portfolio-copilot`;
 
 const Copilot = () => {
   const { toast } = useToast();
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      role: 'assistant',
-      content: "Welcome to WealthOS AI Copilot. I'm your intelligent assistant for portfolio analysis, client insights, compliance monitoring, and strategic recommendations. Select an agent below or ask me anything about your wealth management operations.",
-      timestamp: new Date(),
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -77,13 +76,18 @@ const Copilot = () => {
     }
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleClearChat = () => {
+    setMessages([]);
+  };
+
+  const handleSend = async (promptText?: string) => {
+    const textToSend = promptText || input;
+    if (!textToSend.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: input,
+      content: textToSend,
       timestamp: new Date(),
     };
 
@@ -100,9 +104,9 @@ const Copilot = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           messages: [...messages, userMessage].map(m => ({ role: m.role, content: m.content })),
-          agentType: selectedAgent 
+          agentType: selectedAgent
         }),
       });
 
@@ -123,7 +127,7 @@ const Copilot = () => {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        
+
         textBuffer += decoder.decode(value, { stream: true });
 
         let newlineIndex: number;
@@ -143,7 +147,7 @@ const Copilot = () => {
             const content = parsed.choices?.[0]?.delta?.content as string | undefined;
             if (content) {
               assistantContent += content;
-              setMessages(prev => 
+              setMessages(prev =>
                 prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantContent } : m)
               );
             }
@@ -156,7 +160,7 @@ const Copilot = () => {
 
       // Final flush
       if (textBuffer.trim()) {
-        for (let raw of textBuffer.split("\n")) {
+        for (const raw of textBuffer.split("\n")) {
           if (!raw || raw.startsWith(":") || !raw.startsWith("data: ")) continue;
           const jsonStr = raw.slice(6).trim();
           if (jsonStr === "[DONE]") continue;
@@ -165,7 +169,7 @@ const Copilot = () => {
             const content = parsed.choices?.[0]?.delta?.content;
             if (content) {
               assistantContent += content;
-              setMessages(prev => 
+              setMessages(prev =>
                 prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantContent } : m)
               );
             }
@@ -180,57 +184,69 @@ const Copilot = () => {
         description: error instanceof Error ? error.message : "Failed to get AI response",
         variant: "destructive"
       });
-      // Remove the empty assistant message on error
       setMessages(prev => prev.filter(m => m.content !== ''));
     } finally {
       setIsLoading(false);
+      inputRef.current?.focus();
     }
   };
 
+  const selectedAgentData = agents.find(a => a.id === selectedAgent);
+
   return (
     <MainLayout>
-      <div className="h-[calc(100vh-7rem)] flex gap-6 animate-fade-in">
-        {/* Left Panel - Agents */}
-        <div className="w-80 flex-shrink-0 space-y-4">
-          <div className="glass rounded-xl p-4">
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
+      <div className="h-[calc(100vh-7rem)] flex gap-4 animate-fade-in">
+        {/* Left Panel - Agents & Prompts */}
+        <div className="w-72 flex-shrink-0 flex flex-col gap-4">
+          {/* Agents */}
+          <div className="glass rounded-xl p-4 flex-shrink-0">
+            <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm">
               <Sparkles className="h-4 w-4 text-primary" />
               AI Agents
             </h3>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {agents.map((agent) => (
                 <button
                   key={agent.id}
                   onClick={() => setSelectedAgent(selectedAgent === agent.id ? null : agent.id)}
                   className={cn(
-                    'w-full flex items-start gap-3 p-3 rounded-lg transition-all text-left',
+                    'w-full flex items-center gap-2.5 p-2.5 rounded-lg transition-all text-left group',
                     selectedAgent === agent.id
                       ? 'bg-primary/10 border border-primary/30'
                       : 'hover:bg-secondary/50 border border-transparent'
                   )}
                 >
-                  <div className={cn('h-8 w-8 rounded-lg bg-secondary flex items-center justify-center', agent.color)}>
-                    <agent.icon className="h-4 w-4" />
+                  <div className={cn('h-7 w-7 rounded-md flex items-center justify-center flex-shrink-0', agent.bgColor, agent.color)}>
+                    <agent.icon className="h-3.5 w-3.5" />
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">{agent.name}</p>
-                    <p className="text-xs text-muted-foreground">{agent.description}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium truncate">{agent.name}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">{agent.description}</p>
                   </div>
+                  {selectedAgent === agent.id && (
+                    <ChevronRight className="h-3 w-3 text-primary flex-shrink-0" />
+                  )}
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="glass rounded-xl p-4">
-            <h3 className="font-semibold mb-3">Quick Prompts</h3>
-            <div className="space-y-2">
-              {samplePrompts.slice(0, 4).map((prompt, i) => (
+          {/* Quick Prompts */}
+          <div className="glass rounded-xl p-4 flex-1 overflow-hidden flex flex-col">
+            <h3 className="font-semibold mb-3 text-sm flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-muted-foreground" />
+              Quick Prompts
+            </h3>
+            <div className="space-y-1.5 overflow-y-auto flex-1">
+              {samplePrompts.map((prompt, i) => (
                 <button
                   key={i}
-                  onClick={() => setInput(prompt)}
-                  className="w-full text-left text-xs text-muted-foreground hover:text-foreground p-2 rounded-lg hover:bg-secondary/50 transition-colors"
+                  onClick={() => handleSend(prompt.text)}
+                  disabled={isLoading}
+                  className="w-full flex items-center gap-2 text-left text-xs text-muted-foreground hover:text-foreground p-2 rounded-lg hover:bg-secondary/50 transition-colors disabled:opacity-50 group"
                 >
-                  {prompt}
+                  <prompt.icon className="h-3 w-3 flex-shrink-0 group-hover:text-primary transition-colors" />
+                  <span className="line-clamp-2">{prompt.text}</span>
                 </button>
               ))}
             </div>
@@ -240,72 +256,169 @@ const Copilot = () => {
         {/* Main Chat Area */}
         <div className="flex-1 glass rounded-xl flex flex-col overflow-hidden">
           {/* Header */}
-          <div className="p-4 border-b border-border flex items-center justify-between">
+          <div className="px-5 py-3 border-b border-border flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-gradient-gold flex items-center justify-center">
-                <Bot className="h-5 w-5 text-primary-foreground" />
+              <div className="h-9 w-9 rounded-lg bg-gradient-gold flex items-center justify-center">
+                <Bot className="h-4 w-4 text-primary-foreground" />
               </div>
               <div>
-                <h2 className="font-semibold flex items-center gap-2">
+                <h2 className="font-semibold text-sm flex items-center gap-2">
                   WealthOS Copilot
-                  <Badge variant="outline" className="text-xs bg-success/10 text-success border-success/20">
-                    AI Powered
+                  <Badge variant="outline" className="text-[10px] h-5 bg-success/10 text-success border-success/20">
+                    AI
                   </Badge>
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  {selectedAgent 
-                    ? `Active: ${agents.find(a => a.id === selectedAgent)?.name}`
-                    : 'All agents available'}
+                  {selectedAgentData
+                    ? <span className={selectedAgentData.color}>{selectedAgentData.name}</span>
+                    : 'General Assistant'}
                 </p>
               </div>
             </div>
+            {messages.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearChat}
+                className="text-muted-foreground hover:text-destructive h-8 gap-1.5"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Clear
+              </Button>
+            )}
           </div>
 
           {/* Messages */}
-          <ScrollArea className="flex-1 p-6" ref={scrollRef}>
-            <div className="space-y-6 max-w-4xl mx-auto">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={cn(
-                    'flex gap-4',
-                    message.role === 'user' ? 'justify-end' : 'justify-start'
-                  )}
-                >
-                  {message.role === 'assistant' && (
-                    <div className="h-8 w-8 rounded-full bg-gradient-gold flex items-center justify-center flex-shrink-0">
-                      <Bot className="h-4 w-4 text-primary-foreground" />
-                    </div>
-                  )}
+          <ScrollArea className="flex-1" ref={scrollRef}>
+            <div className="p-5 space-y-5">
+              {messages.length === 0 ? (
+                // Empty State
+                <div className="flex flex-col items-center justify-center h-[400px] text-center">
+                  <div className="h-16 w-16 rounded-2xl bg-gradient-gold flex items-center justify-center mb-4">
+                    <Bot className="h-8 w-8 text-primary-foreground" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">Welcome to WealthOS Copilot</h3>
+                  <p className="text-sm text-muted-foreground max-w-md mb-6">
+                    I can help you analyze portfolios, query client data, track tasks, and provide insights.
+                    Select an agent or ask me anything.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 max-w-lg">
+                    {samplePrompts.slice(0, 4).map((prompt, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleSend(prompt.text)}
+                        className="flex items-center gap-2 text-left text-xs p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors group"
+                      >
+                        <prompt.icon className="h-4 w-4 text-muted-foreground group-hover:text-primary flex-shrink-0" />
+                        <span className="line-clamp-1">{prompt.text}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                // Messages
+                messages.map((message) => (
                   <div
+                    key={message.id}
                     className={cn(
-                      'max-w-[80%] rounded-xl px-5 py-4',
-                      message.role === 'user'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-secondary/50'
+                      'flex gap-3',
+                      message.role === 'user' ? 'justify-end' : 'justify-start'
                     )}
                   >
-                    <div className="prose prose-sm dark:prose-invert max-w-none">
-                      <ReactMarkdown>{message.content}</ReactMarkdown>
+                    {message.role === 'assistant' && (
+                      <div className="h-7 w-7 rounded-lg bg-gradient-gold flex items-center justify-center flex-shrink-0 mt-1">
+                        <Bot className="h-3.5 w-3.5 text-primary-foreground" />
+                      </div>
+                    )}
+                    <div
+                      className={cn(
+                        'rounded-xl max-w-[85%]',
+                        message.role === 'user'
+                          ? 'bg-primary text-primary-foreground px-4 py-2.5'
+                          : 'bg-secondary/30 px-4 py-3'
+                      )}
+                    >
+                      {message.role === 'user' ? (
+                        <p className="text-sm">{message.content}</p>
+                      ) : (
+                        <div className="copilot-markdown text-sm">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              table: ({ children }) => (
+                                <div className="overflow-x-auto my-3 rounded-lg border border-border">
+                                  <table className="w-full text-xs">{children}</table>
+                                </div>
+                              ),
+                              thead: ({ children }) => (
+                                <thead className="bg-secondary/50 border-b border-border">{children}</thead>
+                              ),
+                              th: ({ children }) => (
+                                <th className="px-3 py-2 text-left font-semibold text-foreground whitespace-nowrap">{children}</th>
+                              ),
+                              td: ({ children }) => (
+                                <td className="px-3 py-2 border-b border-border/50 whitespace-nowrap">{children}</td>
+                              ),
+                              tr: ({ children }) => (
+                                <tr className="hover:bg-secondary/30 transition-colors">{children}</tr>
+                              ),
+                              p: ({ children }) => (
+                                <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>
+                              ),
+                              ul: ({ children }) => (
+                                <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>
+                              ),
+                              ol: ({ children }) => (
+                                <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>
+                              ),
+                              li: ({ children }) => (
+                                <li className="leading-relaxed">{children}</li>
+                              ),
+                              h1: ({ children }) => (
+                                <h1 className="text-lg font-bold mb-2 mt-3 first:mt-0">{children}</h1>
+                              ),
+                              h2: ({ children }) => (
+                                <h2 className="text-base font-semibold mb-2 mt-3 first:mt-0">{children}</h2>
+                              ),
+                              h3: ({ children }) => (
+                                <h3 className="text-sm font-semibold mb-1.5 mt-2 first:mt-0">{children}</h3>
+                              ),
+                              strong: ({ children }) => (
+                                <strong className="font-semibold text-foreground">{children}</strong>
+                              ),
+                              code: ({ children }) => (
+                                <code className="px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">{children}</code>
+                              ),
+                              pre: ({ children }) => (
+                                <pre className="p-3 rounded-lg bg-secondary overflow-x-auto my-2 text-xs">{children}</pre>
+                              ),
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+                        </div>
+                      )}
                     </div>
+                    {message.role === 'user' && (
+                      <div className="h-7 w-7 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0 mt-1">
+                        <span className="text-[10px] font-medium">You</span>
+                      </div>
+                    )}
                   </div>
-                  {message.role === 'user' && (
-                    <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-medium">You</span>
-                    </div>
-                  )}
-                </div>
-              ))}
+                ))
+              )}
+
+              {/* Loading State */}
               {isLoading && messages[messages.length - 1]?.content === '' && (
-                <div className="flex gap-4">
-                  <div className="h-8 w-8 rounded-full bg-gradient-gold flex items-center justify-center">
-                    <Bot className="h-4 w-4 text-primary-foreground" />
+                <div className="flex gap-3">
+                  <div className="h-7 w-7 rounded-lg bg-gradient-gold flex items-center justify-center">
+                    <Bot className="h-3.5 w-3.5 text-primary-foreground" />
                   </div>
-                  <div className="bg-secondary/50 rounded-xl px-5 py-4">
-                    <div className="flex gap-1">
-                      <span className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <div className="bg-secondary/30 rounded-xl px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Database className="h-4 w-4 text-primary animate-pulse" />
+                      <span className="text-sm text-muted-foreground">Querying your data...</span>
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
                     </div>
                   </div>
                 </div>
@@ -314,22 +427,29 @@ const Copilot = () => {
           </ScrollArea>
 
           {/* Input */}
-          <div className="p-4 border-t border-border">
-            <div className="max-w-4xl mx-auto flex gap-3">
+          <div className="p-4 border-t border-border flex-shrink-0 bg-background/50">
+            <div className="flex gap-2">
               <Input
+                ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                placeholder="Ask about portfolios, clients, compliance, or market insights..."
-                className="flex-1 bg-secondary/50 h-12"
+                placeholder={selectedAgentData
+                  ? `Ask ${selectedAgentData.name}...`
+                  : "Ask about portfolios, clients, orders, tasks..."}
+                className="flex-1 bg-secondary/50 h-11 text-sm"
                 disabled={isLoading}
               />
               <Button
-                onClick={handleSend}
+                onClick={() => handleSend()}
                 disabled={!input.trim() || isLoading}
-                className="bg-gradient-gold hover:opacity-90 h-12 px-6"
+                className="bg-gradient-gold hover:opacity-90 h-11 px-5"
               >
-                <Send className="h-4 w-4" />
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
               </Button>
             </div>
           </div>
