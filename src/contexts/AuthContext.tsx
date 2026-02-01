@@ -68,34 +68,55 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string, selectedRole: AppRole) => {
-    const redirectUrl = `${window.location.origin}/`;
+    try {
+      const redirectUrl = `${window.location.origin}/`;
 
-    // Store role in user metadata - the database trigger will handle inserting into user_roles
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: {
-          full_name: fullName,
-          role: selectedRole,
+      // Store role in user metadata - the database trigger will handle inserting into user_roles
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            full_name: fullName,
+            role: selectedRole,
+          }
         }
-      }
-    });
+      });
 
-    // If signup was successful and returned a session, user is auto-confirmed
-    const isAutoConfirmed = !error && data?.session !== null;
+      // If signup was successful and returned a session, user is auto-confirmed
+      const isAutoConfirmed = !error && data?.session !== null;
 
-    return { error, isAutoConfirmed };
+      return { error, isAutoConfirmed };
+    } catch (err) {
+      // Handle network errors
+      console.error('Sign up network error:', err);
+      return {
+        error: new Error(
+          'Unable to connect to the server. Please check your internet connection and try again.'
+        ) as Error,
+        isAutoConfirmed: false
+      };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
 
-    return { error };
+      return { error };
+    } catch (err) {
+      // Handle network errors (ERR_CONNECTION_CLOSED, etc.)
+      console.error('Sign in network error:', err);
+      return {
+        error: new Error(
+          'Unable to connect to the server. Please check your internet connection and try again.'
+        ) as Error
+      };
+    }
   };
 
   const signOut = async () => {
