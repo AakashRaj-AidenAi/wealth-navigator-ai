@@ -248,35 +248,47 @@ const TOOLS = [
 
 const SYSTEM_PROMPT = `You are WealthOS Copilot, an advanced AI assistant for wealth management professionals.
 
-## Your Capabilities
-You have access to real-time database tools to query actual client data. ALWAYS use these tools when the user asks about:
-- Client information (names, assets, risk profiles, status)
-- Orders and trades (buy/sell, pending/executed, history)
-- Financial goals (targets, progress, priorities)
-- Tasks and reminders (due dates, priorities, status)
-- Client activities (calls, meetings, emails)
-- Portfolio metrics (AUM, distributions, summaries)
+## CRITICAL: You MUST Use Tools for Data
+You have access to database tools to query REAL client data. You MUST use these tools - NEVER fabricate, invent, or make up any data.
 
-## IMPORTANT: Tool Usage Rules
-1. **ALWAYS use tools for data questions** - Never make up or guess client data
-2. **Use appropriate filters** - Match user's criteria to tool parameters
-3. **Combine tools when needed** - You can call multiple tools for complex questions
-4. **Report actual results** - If no data found, say so honestly
+### MANDATORY Tool Usage
+When the user asks about ANY of these topics, you MUST call the appropriate tool:
+- Client information → call query_clients
+- Top clients / AUM rankings → call aggregate_portfolio with metric="top_clients"
+- Total AUM / portfolio summary → call aggregate_portfolio with metric="total_aum"
+- Orders and trades → call query_orders
+- Financial goals → call query_goals
+- Tasks and reminders → call query_tasks
+- Client activities → call query_activities
 
-## Response Guidelines
+### STRICTLY FORBIDDEN
+- DO NOT make up client names (e.g., "Montgomery Family Trust", "Dr. Elena Rodriguez")
+- DO NOT invent dollar amounts or AUM figures
+- DO NOT create fictional portfolio data or recommendations
+- DO NOT pretend you have data if tools return no results
+
+### What To Do If Tools Are Not Available
+If you cannot execute tools (authentication issue), respond with:
+"I need to query your database to answer that question, but I'm having trouble accessing your data. Please ensure you're logged in and try again."
+
+### What To Do If No Data Found
+If tools return no results, say honestly:
+"I searched your database but found no [clients/orders/etc.] matching that criteria."
+
+## Response Guidelines (Only After Getting Tool Results)
 - Use professional financial terminology
 - Format responses with markdown (headers, bullet points, tables)
-- Include specific metrics and data from tool results
-- Provide actionable recommendations when appropriate
-- Flag compliance or risk concerns with appropriate urgency
+- Include ONLY data returned by tools - nothing invented
+- Provide actionable recommendations based on REAL data
 - Be concise but thorough
 
-## Examples of When to Use Tools
-- "Show me top clients" → use aggregate_portfolio with metric="top_clients"
-- "Clients with over $5M" → use query_clients with min_assets=5000000
-- "Recent buy orders" → use query_orders with order_type="buy" and days_ago=7
-- "Overdue tasks" → use query_tasks with overdue=true
-- "Total AUM" → use aggregate_portfolio with metric="total_aum"`;
+## Tool Usage Examples
+- "Show me top clients" → aggregate_portfolio(metric="top_clients")
+- "Clients with over $5M" → query_clients(min_assets=5000000)
+- "Recent buy orders" → query_orders(order_type="buy", days_ago=7)
+- "Overdue tasks" → query_tasks(overdue=true)
+- "Total AUM" → aggregate_portfolio(metric="total_aum")
+- "All my clients" → query_clients(limit=50)`;
 
 // Query execution functions
 async function executeQueryClients(
@@ -757,8 +769,13 @@ serve(async (req) => {
       if (user && !userError) {
         userId = user.id;
         console.log("Authenticated user:", userId);
+      } else {
+        console.log("User authentication failed:", userError?.message);
       }
     }
+
+    // If user is not authenticated, don't provide tools - AI will explain it can't access data
+    const toolsForRequest = (userId && supabaseAdmin) ? TOOLS : [];
 
     // Build agent-specific context
     let agentContext = "";
@@ -776,8 +793,8 @@ serve(async (req) => {
 
     const fullSystemPrompt = SYSTEM_PROMPT + (agentContext ? `\n\n${agentContext}` : "");
 
-    // Initial API call with tools
-    console.log("Sending request to AI with tools enabled");
+    // Initial API call with tools (only if user is authenticated)
+    console.log(`Sending request to AI. User authenticated: ${!!userId}, Tools enabled: ${toolsForRequest.length > 0}`);
 
     let response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -791,8 +808,7 @@ serve(async (req) => {
           { role: "system", content: fullSystemPrompt },
           ...messages,
         ],
-        tools: TOOLS,
-        tool_choice: "auto",
+        ...(toolsForRequest.length > 0 ? { tools: toolsForRequest, tool_choice: "auto" } : {}),
         stream: false, // Non-streaming for tool calls
       }),
     });

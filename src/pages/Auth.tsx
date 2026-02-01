@@ -131,8 +131,8 @@ const Auth = () => {
 
     setIsSubmitting(true);
     
-    const { error } = await signUp(signupEmail, signupPassword, fullName, selectedRole);
-    
+    const { error, isAutoConfirmed } = await signUp(signupEmail, signupPassword, fullName, selectedRole);
+
     if (error) {
       let errorMessage = error.message;
       if (error.message.includes('User already registered')) {
@@ -143,7 +143,15 @@ const Auth = () => {
         description: errorMessage,
         variant: 'destructive'
       });
+    } else if (isAutoConfirmed) {
+      // User was auto-confirmed and signed in
+      toast({
+        title: 'Welcome!',
+        description: 'Your account has been created successfully.'
+      });
+      navigate('/');
     } else {
+      // Email confirmation required
       toast({
         title: 'Account Created',
         description: 'Please check your email to verify your account before signing in.'

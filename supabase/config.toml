@@ -1,5 +1,15 @@
 project_id = "auveypqsxlbuoqhvasim"
 
+[auth]
+# Disable email confirmation - users can sign in immediately after signup
+enable_signup = true
+enable_confirmations = false
+
+[auth.email]
+# Disable email confirmation requirement
+enable_confirmations = false
+double_confirm_changes = false
+
 [functions.portfolio-copilot]
 verify_jwt = false
 
