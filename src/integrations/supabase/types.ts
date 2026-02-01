@@ -1333,6 +1333,121 @@ export type Database = {
         }
         Relationships: []
       }
+      risk_answers: {
+        Row: {
+          created_at: string
+          id: string
+          profile_id: string
+          question_category: string
+          question_id: string
+          question_text: string
+          selected_option: string
+          selected_score: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          profile_id: string
+          question_category: string
+          question_id: string
+          question_text: string
+          selected_option: string
+          selected_score: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          profile_id?: string
+          question_category?: string
+          question_id?: string
+          question_text?: string
+          selected_option?: string
+          selected_score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "risk_answers_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "risk_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      risk_profiles: {
+        Row: {
+          advisor_id: string
+          alternatives_pct: number
+          cash_pct: number
+          category: Database["public"]["Enums"]["risk_category"]
+          client_id: string
+          created_at: string
+          debt_pct: number
+          equity_pct: number
+          gold_pct: number
+          id: string
+          ip_address: string | null
+          is_active: boolean
+          notes: string | null
+          signature_data: string | null
+          signed_at: string | null
+          total_score: number
+          updated_at: string
+          user_agent: string | null
+          version: number
+        }
+        Insert: {
+          advisor_id: string
+          alternatives_pct?: number
+          cash_pct?: number
+          category?: Database["public"]["Enums"]["risk_category"]
+          client_id: string
+          created_at?: string
+          debt_pct?: number
+          equity_pct?: number
+          gold_pct?: number
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean
+          notes?: string | null
+          signature_data?: string | null
+          signed_at?: string | null
+          total_score?: number
+          updated_at?: string
+          user_agent?: string | null
+          version?: number
+        }
+        Update: {
+          advisor_id?: string
+          alternatives_pct?: number
+          cash_pct?: number
+          category?: Database["public"]["Enums"]["risk_category"]
+          client_id?: string
+          created_at?: string
+          debt_pct?: number
+          equity_pct?: number
+          gold_pct?: number
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean
+          notes?: string | null
+          signature_data?: string | null
+          signed_at?: string | null
+          total_score?: number
+          updated_at?: string
+          user_agent?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "risk_profiles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           assigned_to: string
@@ -1512,6 +1627,12 @@ export type Database = {
         | "review_meeting"
         | "custom"
       report_type: "compliance" | "analytics" | "performance" | "risk"
+      risk_category:
+        | "very_conservative"
+        | "conservative"
+        | "moderate"
+        | "aggressive"
+        | "very_aggressive"
       task_priority: "low" | "medium" | "high" | "urgent"
       task_status: "todo" | "in_progress" | "done" | "cancelled"
       task_trigger:
@@ -1726,6 +1847,13 @@ export const Constants = {
         "custom",
       ],
       report_type: ["compliance", "analytics", "performance", "risk"],
+      risk_category: [
+        "very_conservative",
+        "conservative",
+        "moderate",
+        "aggressive",
+        "very_aggressive",
+      ],
       task_priority: ["low", "medium", "high", "urgent"],
       task_status: ["todo", "in_progress", "done", "cancelled"],
       task_trigger: [
