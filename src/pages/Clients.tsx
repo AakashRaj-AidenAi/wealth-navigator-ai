@@ -39,7 +39,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { AddClientModal } from '@/components/modals/AddClientModal';
+import { OnboardingWizard } from '@/components/onboarding';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
@@ -420,7 +420,7 @@ const Clients = () => {
         )}
       </div>
 
-      <AddClientModal 
+      <OnboardingWizard 
         open={addClientOpen} 
         onOpenChange={setAddClientOpen}
         onSuccess={fetchClients}
