@@ -30,7 +30,8 @@ import {
   StickyNote,
   Landmark,
   Sparkles,
-  Brain
+  Brain,
+  ShieldCheck
 } from 'lucide-react';
 
 import { ClientOverviewTab } from '@/components/clients/ClientOverviewTab';
@@ -47,6 +48,7 @@ import { ClientCorporateActionsTab } from '@/components/clients/ClientCorporateA
 import { EditClientModal } from '@/components/modals/EditClientModal';
 import { QuickNoteModal } from '@/components/clients/QuickNoteModal';
 import { AIDraftMessageModal, MeetingSummaryModal } from '@/components/ai-growth-engine';
+import { ClientRiskProfileTab } from '@/components/risk-profiling';
 
 interface Client {
   id: string;
@@ -320,6 +322,10 @@ const ClientProfile = () => {
               <User className="h-4 w-4" />
               Overview
             </TabsTrigger>
+            <TabsTrigger value="risk-profile" className="gap-2">
+              <ShieldCheck className="h-4 w-4" />
+              Risk Profile
+            </TabsTrigger>
             <TabsTrigger value="portfolio" className="gap-2">
               <PieChart className="h-4 w-4" />
               Portfolio
@@ -364,6 +370,9 @@ const ClientProfile = () => {
 
           <TabsContent value="overview">
             <ClientOverviewTab client={client} tags={tags} onTagsChange={fetchClient} />
+          </TabsContent>
+          <TabsContent value="risk-profile">
+            <ClientRiskProfileTab clientId={client.id} clientName={client.client_name} />
           </TabsContent>
           <TabsContent value="portfolio">
             <ClientPortfolioTab clientId={client.id} totalAssets={Number(client.total_assets)} />
