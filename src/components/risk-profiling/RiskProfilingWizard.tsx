@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { Database } from '@/integrations/supabase/types';
 import {
   Dialog,
   DialogContent,
@@ -19,9 +20,10 @@ import {
   getCategoryLabel,
   RiskAnswer,
   RiskCategory,
-  AllocationSuggestion,
 } from './types';
-import { ArrowLeft, ArrowRight, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
+
+type RiskCategoryEnum = Database['public']['Enums']['risk_category'];
 
 interface RiskProfilingWizardProps {
   open: boolean;
@@ -140,7 +142,7 @@ export const RiskProfilingWizard = ({
           client_id: clientId,
           advisor_id: user.id,
           total_score: totalScore,
-          category: category,
+          category: category as RiskCategoryEnum,
           equity_pct: allocation.equity,
           debt_pct: allocation.debt,
           gold_pct: allocation.gold,
@@ -157,7 +159,16 @@ export const RiskProfilingWizard = ({
         .select()
         .single();
 
-      if (profileError) throw profileError;
+      console.log('Risk profile save result:', { profile, profileError });
+
+      if (profileError) {
+        console.error('Profile save error:', profileError);
+        throw profileError;
+      }
+
+      if (!profile) {
+        throw new Error('No profile returned after insert');
+      }
 
       // Save all answers
       const answerInserts = answers.map((answer) => ({
@@ -173,7 +184,12 @@ export const RiskProfilingWizard = ({
         .from('risk_answers')
         .insert(answerInserts);
 
-      if (answersError) throw answersError;
+      if (answersError) {
+        console.error('Answers save error:', answersError);
+        throw answersError;
+      }
+
+      console.log('Risk answers saved successfully');
 
       // Update client's risk_profile field
       await supabase
@@ -198,11 +214,12 @@ export const RiskProfilingWizard = ({
       onComplete?.();
       onOpenChange(false);
       resetWizard();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving risk profile:', error);
+      const errorMessage = error?.message || error?.details || 'Failed to save risk profile. Please try again.';
       toast({
-        title: 'Error',
-        description: 'Failed to save risk profile. Please try again.',
+        title: 'Error Saving Risk Profile',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
