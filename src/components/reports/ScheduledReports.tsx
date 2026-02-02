@@ -26,44 +26,9 @@ interface ScheduledReport {
   nextRun: string;
 }
 
-const mockScheduledReports: ScheduledReport[] = [
-  {
-    id: '1',
-    name: 'Monthly Portfolio Summary',
-    reportType: 'monthly_portfolio',
-    frequency: 'monthly',
-    dayOfMonth: 1,
-    recipients: 45,
-    isActive: true,
-    lastRun: '2025-01-01T10:00:00Z',
-    nextRun: '2025-02-01T10:00:00Z'
-  },
-  {
-    id: '2',
-    name: 'Quarterly Performance Review',
-    reportType: 'quarterly_performance',
-    frequency: 'quarterly',
-    dayOfMonth: 5,
-    recipients: 38,
-    isActive: true,
-    lastRun: '2025-01-05T10:00:00Z',
-    nextRun: '2025-04-05T10:00:00Z'
-  },
-  {
-    id: '3',
-    name: 'Tax P&L Statements',
-    reportType: 'tax_pnl',
-    frequency: 'monthly',
-    dayOfMonth: 15,
-    recipients: 52,
-    isActive: false,
-    lastRun: '2024-12-15T10:00:00Z',
-    nextRun: '2025-02-15T10:00:00Z'
-  }
-];
-
+// Feature placeholder - scheduled reports will be implemented with a database table
 export const ScheduledReports = () => {
-  const [scheduledReports, setScheduledReports] = useState<ScheduledReport[]>(mockScheduledReports);
+  const [scheduledReports, setScheduledReports] = useState<ScheduledReport[]>([]);
 
   const toggleActive = (id: string) => {
     setScheduledReports(prev =>

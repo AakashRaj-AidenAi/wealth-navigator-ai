@@ -25,7 +25,7 @@ const Reports = () => {
   const [stats, setStats] = useState<ReportStats>({
     totalGenerated: 0,
     thisMonth: 0,
-    scheduled: 3, // Mock for now
+    scheduled: 0,
     sent: 0
   });
   const [refreshKey, setRefreshKey] = useState(0);
@@ -47,8 +47,8 @@ const Reports = () => {
     setStats({
       totalGenerated: allReports.count || 0,
       thisMonth: monthlyReports.count || 0,
-      scheduled: 3,
-      sent: Math.floor((monthlyReports.count || 0) * 0.8)
+      scheduled: 0, // Feature not yet implemented
+      sent: monthlyReports.count || 0 // Assume all generated reports are sent
     });
   };
 

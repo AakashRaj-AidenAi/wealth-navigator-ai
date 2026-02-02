@@ -80,6 +80,12 @@ const fetchDatabaseData = async (queryTypes: string[]): Promise<Record<string, u
   for (const type of queryTypes) {
     switch (type) {
       case 'clients': {
+        // First get total AUM from ALL clients (no limit) for accurate calculation
+        const { data: allClients, error: allError } = await supabase
+          .from('clients')
+          .select('total_assets');
+
+        // Then get detailed client list for display (with limit)
         const { data: clients, error } = await supabase
           .from('clients')
           .select('id, client_name, email, phone, total_assets, risk_profile, status, created_at')
@@ -87,13 +93,22 @@ const fetchDatabaseData = async (queryTypes: string[]): Promise<Record<string, u
           .limit(50);
 
         if (!error && clients) {
+          // Calculate total AUM from ALL clients, not just the limited list
+          const totalAUM = allClients && !allError
+            ? allClients.reduce((sum, c) => sum + (Number(c.total_assets) || 0), 0)
+            : clients.reduce((sum, c) => sum + (Number(c.total_assets) || 0), 0);
+
+          const totalClientCount = allClients?.length || clients.length;
+
           data.clients = clients.map(c => ({
             ...c,
             total_assets_formatted: formatCurrency(Number(c.total_assets) || 0)
           }));
-          data.total_aum = clients.reduce((sum, c) => sum + (Number(c.total_assets) || 0), 0);
-          data.total_aum_formatted = formatCurrency(data.total_aum as number);
-          data.client_count = clients.length;
+          data.total_aum = totalAUM;
+          data.total_aum_formatted = formatCurrency(totalAUM);
+          data.client_count = totalClientCount;
+          data.avg_client_aum = totalClientCount > 0 ? totalAUM / totalClientCount : 0;
+          data.avg_client_aum_formatted = formatCurrency(data.avg_client_aum as number);
         }
         break;
       }
