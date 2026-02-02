@@ -49,6 +49,8 @@ export const DashboardStatsProvider = ({ children }: { children: ReactNode }) =>
         ordersResult,
         tasksResult,
         leadsResult,
+        documentsResult,
+        pendingConsentsResult,
       ] = await Promise.all([
         // Fetch ALL clients for accurate count (no advisor filter)
         supabase.from('clients').select('id, total_assets, kyc_expiry_date'),
@@ -63,22 +65,54 @@ export const DashboardStatsProvider = ({ children }: { children: ReactNode }) =>
           .from('leads')
           .select('id')
           .not('stage', 'in', '("closed_won","lost")'),
+        // Fetch client documents for missing docs alerts
+        supabase
+          .from('client_documents')
+          .select('client_id, document_type'),
+        // Fetch pending consents
+        supabase
+          .from('client_consents')
+          .select('id')
+          .eq('status', 'pending'),
       ]);
 
       const clients = clientsResult.data || [];
       const orders = ordersResult.data || [];
       const tasks = tasksResult.data || [];
       const leads = leadsResult.data || [];
+      const documents = documentsResult.data || [];
+      const pendingConsents = pendingConsentsResult.data || [];
 
-      // Calculate dynamic compliance alerts from KYC expiry dates
+      // Calculate alerts count matching ComplianceAlerts.tsx logic
       const today = new Date();
       const thirtyDaysFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-      const alertsCount = clients.filter(client => {
+      // 1. KYC expiry alerts
+      const kycAlerts = clients.filter(client => {
         if (!client.kyc_expiry_date) return false;
         const expiryDate = new Date(client.kyc_expiry_date);
         return expiryDate <= thirtyDaysFromNow;
       }).length;
+
+      // 2. Missing documents alerts
+      const requiredDocTypes = ['kyc', 'id_proof', 'address_proof'];
+      const clientDocMap = new Map<string, Set<string>>();
+      documents.forEach(doc => {
+        if (!clientDocMap.has(doc.client_id)) {
+          clientDocMap.set(doc.client_id, new Set());
+        }
+        clientDocMap.get(doc.client_id)!.add(doc.document_type);
+      });
+      const missingDocsAlerts = clients.filter(client => {
+        const clientDocs = clientDocMap.get(client.id) || new Set();
+        return requiredDocTypes.some(type => !clientDocs.has(type));
+      }).length;
+
+      // 3. Pending consents
+      const pendingConsentsCount = pendingConsents.length;
+
+      // Total alerts
+      const alertsCount = kycAlerts + missingDocsAlerts + pendingConsentsCount;
 
       const totalAUM = clients.reduce((sum, c) => sum + (Number(c.total_assets) || 0), 0);
 

@@ -60,22 +60,23 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchStats = async () => {
       if (!user) return;
-      
+
       const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
-      
+
       // Parallel fetch all data
       const [
         clientsResult,
         ordersResult,
         tasksResult,
         leadsResult,
-        todayOrdersResult
+        allOrdersResult,
+        documentsResult,
+        pendingConsentsResult
       ] = await Promise.all([
         // Fetch ALL clients for accurate AUM calculation (no advisor filter)
         supabase
           .from('clients')
-          .select('total_assets, kyc_expiry_date'),
+          .select('id, total_assets, kyc_expiry_date'),
         supabase
           .from('orders')
           .select('id')
@@ -90,36 +91,74 @@ const Dashboard = () => {
           .from('leads')
           .select('id, expected_value, stage')
           .not('stage', 'in', '("closed_won","lost")'),
+        // Fetch ALL executed orders for net flow calculation
         supabase
           .from('orders')
-          .select('order_type, total_amount, created_at')
-          .gte('created_at', `${todayStr}T00:00:00`)
-          .lte('created_at', `${todayStr}T23:59:59`)
+          .select('order_type, total_amount, quantity, price, created_at, status'),
+        // Fetch client documents for missing docs alerts
+        supabase
+          .from('client_documents')
+          .select('client_id, document_type'),
+        // Fetch pending consents
+        supabase
+          .from('client_consents')
+          .select('id')
+          .eq('status', 'pending')
       ]);
 
       const clients = clientsResult.data || [];
       const orders = ordersResult.data || [];
       const tasks = tasksResult.data || [];
       const leads = leadsResult.data || [];
-      const todayOrders = todayOrdersResult.data || [];
+      const allOrders = allOrdersResult.data || [];
+      const documents = documentsResult.data || [];
+      const pendingConsents = pendingConsentsResult.data || [];
 
       const totalAUM = clients.reduce((sum, c) => sum + (Number(c.total_assets) || 0), 0);
 
-      // Calculate dynamic alerts count from KYC expiry dates (matching ComplianceAlerts.tsx logic)
+      // Calculate alerts count matching ComplianceAlerts.tsx logic
       const thirtyDaysFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
-      const alertsCount = clients.filter(c => {
+
+      // 1. KYC expiry alerts
+      const kycAlerts = clients.filter(c => {
         if (!c.kyc_expiry_date) return false;
         const expiryDate = new Date(c.kyc_expiry_date);
         return expiryDate <= thirtyDaysFromNow;
       }).length;
-      
-      // Calculate daily inflow/outflow from today's orders
-      const dailyInflow = todayOrders
+
+      // 2. Missing documents alerts
+      const requiredDocTypes = ['kyc', 'id_proof', 'address_proof'];
+      const clientDocMap = new Map<string, Set<string>>();
+      documents.forEach(doc => {
+        if (!clientDocMap.has(doc.client_id)) {
+          clientDocMap.set(doc.client_id, new Set());
+        }
+        clientDocMap.get(doc.client_id)!.add(doc.document_type);
+      });
+      const missingDocsAlerts = clients.filter(client => {
+        const clientDocs = clientDocMap.get(client.id) || new Set();
+        return requiredDocTypes.some(type => !clientDocs.has(type));
+      }).length;
+
+      // 3. Pending consents
+      const pendingConsentsCount = pendingConsents.length;
+
+      // Total alerts
+      const alertsCount = kycAlerts + missingDocsAlerts + pendingConsentsCount;
+
+      // Calculate net flow from ALL orders (total_amount or quantity * price)
+      const calculateOrderValue = (o: typeof allOrders[0]) => {
+        if (o.total_amount) return Number(o.total_amount);
+        if (o.quantity && o.price) return o.quantity * o.price;
+        return 0;
+      };
+
+      const dailyInflow = allOrders
         .filter(o => o.order_type === 'buy')
-        .reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
-      const dailyOutflow = todayOrders
+        .reduce((sum, o) => sum + calculateOrderValue(o), 0);
+      const dailyOutflow = allOrders
         .filter(o => o.order_type === 'sell')
-        .reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+        .reduce((sum, o) => sum + calculateOrderValue(o), 0);
 
       // Estimate revenue (simplified: 1% of AUM annually / 365)
       const estimatedDailyRevenue = (totalAUM * 0.01) / 365;
@@ -180,7 +219,7 @@ const Dashboard = () => {
             subtitle="Click to view portfolios"
           />
           <ClickableMetricCard
-            title="Daily Net Flow"
+            title="Net Flow"
             value={formatCurrency(Math.abs(netFlow), true)}
             icon={netFlow >= 0 ? <ArrowUpRight className="h-5 w-5" /> : <ArrowDownRight className="h-5 w-5" />}
             href="/orders"
