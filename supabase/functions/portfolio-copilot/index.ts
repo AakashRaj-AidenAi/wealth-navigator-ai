@@ -246,49 +246,50 @@ const TOOLS = [
   }
 ];
 
-const SYSTEM_PROMPT = `You are WealthOS Copilot, an advanced AI assistant for wealth management professionals.
+const SYSTEM_PROMPT = `You are WealthOS Copilot, an AI assistant for wealth management professionals.
 
-## CRITICAL: You MUST Use Tools for Data
-You have access to database tools to query REAL client data. You MUST use these tools - NEVER fabricate, invent, or make up any data.
+## CRITICAL RULE: YOU MUST CALL A TOOL FIRST
 
-### MANDATORY Tool Usage
-When the user asks about ANY of these topics, you MUST call the appropriate tool:
-- Client information → call query_clients
-- Top clients / AUM rankings → call aggregate_portfolio with metric="top_clients"
-- Total AUM / portfolio summary → call aggregate_portfolio with metric="total_aum"
-- Orders and trades → call query_orders
-- Financial goals → call query_goals
-- Tasks and reminders → call query_tasks
-- Client activities → call query_activities
+You have database tools to query REAL client data. For ANY question about data, you MUST:
+1. FIRST call the appropriate tool
+2. THEN format the tool results for the user
+3. NEVER respond with data before calling a tool
 
-### STRICTLY FORBIDDEN
-- DO NOT make up client names (e.g., "Montgomery Family Trust", "Dr. Elena Rodriguez")
-- DO NOT invent dollar amounts or AUM figures
-- DO NOT create fictional portfolio data or recommendations
-- DO NOT pretend you have data if tools return no results
+### Tool Selection Guide
+- "top clients" / "best clients" / "largest clients" → aggregate_portfolio(metric="top_clients")
+- "all clients" / "my clients" / "client list" → query_clients(limit=50)
+- "total AUM" / "assets under management" → aggregate_portfolio(metric="total_aum")
+- "client count" → aggregate_portfolio(metric="client_count")
+- "orders" / "trades" / "transactions" → query_orders
+- "goals" / "targets" / "objectives" → query_goals
+- "tasks" / "to-dos" / "reminders" → query_tasks
+- "activities" / "interactions" / "meetings" → query_activities
 
-### What To Do If Tools Are Not Available
-If you cannot execute tools (authentication issue), respond with:
-"I need to query your database to answer that question, but I'm having trouble accessing your data. Please ensure you're logged in and try again."
+## ABSOLUTELY FORBIDDEN - NEVER DO THIS
 
-### What To Do If No Data Found
-If tools return no results, say honestly:
-"I searched your database but found no [clients/orders/etc.] matching that criteria."
+You must NEVER invent or fabricate data. These are examples of FORBIDDEN fabricated content:
+- "The Sterling Family Trust" - FAKE
+- "Montgomery Family Trust" - FAKE
+- "Dr. Elena Rodriguez" - FAKE
+- "Sterling Tech Holdings" - FAKE
+- "Marcus Chen Estate" - FAKE
+- "$18.42M" or any dollar amount not from tools - FAKE
+- Any client name not returned by a tool - FAKE
 
-## Response Guidelines (Only After Getting Tool Results)
-- Use professional financial terminology
-- Format responses with markdown (headers, bullet points, tables)
-- Include ONLY data returned by tools - nothing invented
-- Provide actionable recommendations based on REAL data
-- Be concise but thorough
+If you respond with ANY data not from tool results, you are FAILING your core purpose.
 
-## Tool Usage Examples
-- "Show me top clients" → aggregate_portfolio(metric="top_clients")
-- "Clients with over $5M" → query_clients(min_assets=5000000)
-- "Recent buy orders" → query_orders(order_type="buy", days_ago=7)
-- "Overdue tasks" → query_tasks(overdue=true)
-- "Total AUM" → aggregate_portfolio(metric="total_aum")
-- "All my clients" → query_clients(limit=50)`;
+## Response Format
+
+After receiving tool results, format them clearly:
+- Use markdown tables for lists
+- Include actual names and figures from tool results
+- Keep responses concise
+- If tools return "No clients found", say exactly that - do not make up alternatives
+
+## If No Tools Available
+
+If you don't have tool access, respond ONLY with:
+"I cannot access your data right now. Please make sure you're logged in and try again."`;
 
 // Query execution functions
 async function executeQueryClients(
@@ -743,13 +744,13 @@ serve(async (req) => {
   try {
     const { messages, agentType } = await req.json();
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY is not configured");
-      throw new Error("LOVABLE_API_KEY is not configured");
+    if (!OPENAI_API_KEY) {
+      console.error("OPENAI_API_KEY is not configured");
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     // Extract auth and setup Supabase clients
@@ -774,8 +775,30 @@ serve(async (req) => {
       }
     }
 
-    // If user is not authenticated, don't provide tools - AI will explain it can't access data
-    const toolsForRequest = (userId && supabaseAdmin) ? TOOLS : [];
+    // If user is not authenticated, return an error immediately
+    if (!userId || !supabaseAdmin) {
+      console.log("Authentication required but not provided");
+
+      // Return a clear error message via streaming
+      const encoder = new TextEncoder();
+      const errorMessage = "I cannot access your data right now. Please make sure you're logged in and try again.";
+      const stream = new ReadableStream({
+        start(controller) {
+          const data = JSON.stringify({ choices: [{ delta: { content: errorMessage } }] });
+          controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        }
+      });
+
+      return new Response(stream, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "text/event-stream",
+          "X-Auth-Status": "unauthenticated"
+        },
+      });
+    }
 
     // Build agent-specific context
     let agentContext = "";
@@ -793,23 +816,25 @@ serve(async (req) => {
 
     const fullSystemPrompt = SYSTEM_PROMPT + (agentContext ? `\n\n${agentContext}` : "");
 
-    // Initial API call with tools (only if user is authenticated)
-    console.log(`Sending request to AI. User authenticated: ${!!userId}, Tools enabled: ${toolsForRequest.length > 0}`);
+    // Initial API call with tools - force tool_choice: "required" to prevent fabrication
+    console.log(`Sending request to AI. User authenticated: ${!!userId}, Tools: ${TOOLS.length}`);
+    let toolCallsMade = 0;
 
-    let response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    let response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "anthropic/claude-sonnet-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: fullSystemPrompt },
           ...messages,
         ],
-        ...(toolsForRequest.length > 0 ? { tools: toolsForRequest, tool_choice: "auto" } : {}),
-        stream: false, // Non-streaming for tool calls
+        tools: TOOLS,
+        tool_choice: "required", // Force tool usage - AI MUST call a tool first
+        stream: false,
       }),
     });
 
@@ -844,7 +869,9 @@ serve(async (req) => {
 
     // Process tool calls (up to 5 iterations)
     while (assistantMessage?.tool_calls && toolCallCount < maxToolCalls && userId && supabaseAdmin) {
-      console.log(`Processing ${assistantMessage.tool_calls.length} tool call(s), iteration ${toolCallCount + 1}`);
+      const numToolCalls = assistantMessage.tool_calls.length;
+      toolCallsMade += numToolCalls;
+      console.log(`Processing ${numToolCalls} tool call(s), iteration ${toolCallCount + 1}, total tools called: ${toolCallsMade}`);
 
       const toolResults: Array<{ role: string; tool_call_id: string; content: string }> = [];
 
@@ -858,6 +885,7 @@ serve(async (req) => {
           console.error("Failed to parse tool arguments:", e);
         }
 
+        console.log(`Executing tool: ${toolName}`);
         const result = await executeTool(toolName, params, supabaseAdmin, userId);
 
         toolResults.push({
@@ -875,14 +903,14 @@ serve(async (req) => {
         ...toolResults,
       ];
 
-      response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "anthropic/claude-sonnet-4",
+          model: "gpt-4o",
           messages: updatedMessages,
           tools: TOOLS,
           tool_choice: "auto",
@@ -897,6 +925,12 @@ serve(async (req) => {
       result = await response.json();
       assistantMessage = result.choices?.[0]?.message;
       toolCallCount++;
+    }
+
+    // Log tool usage summary
+    console.log(`Request complete. Total tool calls made: ${toolCallsMade}`);
+    if (toolCallsMade === 0) {
+      console.warn("WARNING: No tools were called for this data request!");
     }
 
     // Final response - stream it back
@@ -930,7 +964,11 @@ serve(async (req) => {
     });
 
     return new Response(stream, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/event-stream",
+        "X-Tools-Called": String(toolCallsMade),
+      },
     });
 
   } catch (e) {
