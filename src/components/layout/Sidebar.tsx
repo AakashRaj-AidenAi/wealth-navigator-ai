@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { useDashboardStats } from '@/contexts/DashboardStatsContext';
 import {
   LayoutDashboard,
   Users,
@@ -25,27 +26,27 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   href: string;
-  badge?: number;
+  badgeKey?: 'pendingOrders' | 'alertsCount' | 'unreadMessages' | 'pendingTasks';
 }
 
 const mainNavItems: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
-  { label: 'Tasks', icon: CheckSquare, href: '/tasks' },
+  { label: 'Tasks', icon: CheckSquare, href: '/tasks', badgeKey: 'pendingTasks' },
   { label: 'Leads', icon: UserPlus, href: '/leads' },
   { label: 'Clients', icon: Users, href: '/clients' },
   { label: 'Portfolios', icon: Briefcase, href: '/portfolios' },
   { label: 'Goals & Planning', icon: Target, href: '/goals' },
   { label: 'CIO Desk', icon: TrendingUp, href: '/cio' },
   { label: 'Corp Actions', icon: Landmark, href: '/corporate-actions' },
-  { label: 'Orders', icon: FileCheck, href: '/orders', badge: 3 },
+  { label: 'Orders', icon: FileCheck, href: '/orders', badgeKey: 'pendingOrders' },
   { label: 'Communications', icon: Send, href: '/communications' },
-  { label: 'Compliance', icon: Shield, href: '/compliance', badge: 2 },
+  { label: 'Compliance', icon: Shield, href: '/compliance', badgeKey: 'alertsCount' },
   { label: 'Reports', icon: BarChart3, href: '/reports' },
 ];
 
 const secondaryNavItems: NavItem[] = [
   { label: 'AI Copilot', icon: Bot, href: '/copilot' },
-  { label: 'Messages', icon: MessageSquare, href: '/messages', badge: 5 },
+  { label: 'Messages', icon: MessageSquare, href: '/messages', badgeKey: 'unreadMessages' },
   { label: 'Firm Admin', icon: Building2, href: '/admin' },
   { label: 'Settings', icon: Settings, href: '/settings' },
 ];
@@ -57,6 +58,14 @@ interface SidebarProps {
 
 export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
   const location = useLocation();
+  const { stats } = useDashboardStats();
+
+  // Helper to get badge value from stats
+  const getBadgeValue = (badgeKey?: NavItem['badgeKey']): number | undefined => {
+    if (!badgeKey) return undefined;
+    const value = stats[badgeKey];
+    return value > 0 ? value : undefined;
+  };
 
   return (
     <aside
@@ -96,12 +105,13 @@ export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
           )}
           {mainNavItems.map((item) => {
             const isActive = location.pathname === item.href;
+            const badgeValue = getBadgeValue(item.badgeKey);
             return (
               <Link
                 key={item.href}
                 to={item.href}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group',
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group relative',
                   isActive
                     ? 'bg-primary/10 text-primary'
                     : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
@@ -111,16 +121,16 @@ export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
                 {!collapsed && (
                   <>
                     <span className="flex-1 text-sm font-medium">{item.label}</span>
-                    {item.badge && (
+                    {badgeValue && (
                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
-                        {item.badge}
+                        {badgeValue}
                       </span>
                     )}
                   </>
                 )}
-                {collapsed && item.badge && (
+                {collapsed && badgeValue && (
                   <span className="absolute right-2 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[8px] font-bold text-destructive-foreground">
-                    {item.badge}
+                    {badgeValue}
                   </span>
                 )}
               </Link>
@@ -140,6 +150,7 @@ export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
           )}
           {secondaryNavItems.map((item) => {
             const isActive = location.pathname === item.href;
+            const badgeValue = getBadgeValue(item.badgeKey);
             return (
               <Link
                 key={item.href}
@@ -155,9 +166,9 @@ export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
                 {!collapsed && (
                   <>
                     <span className="flex-1 text-sm font-medium">{item.label}</span>
-                    {item.badge && (
+                    {badgeValue && (
                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary">
-                        {item.badge}
+                        {badgeValue}
                       </span>
                     )}
                   </>

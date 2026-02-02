@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -47,6 +48,7 @@ const formatTime = (timestamp: string) => {
 };
 
 export const AlertsPanel = () => {
+  const navigate = useNavigate();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -55,7 +57,7 @@ export const AlertsPanel = () => {
       // Fetch real data to generate contextual alerts
       const { data: clients } = await supabase
         .from('clients')
-        .select('client_name, risk_profile, total_assets');
+        .select('client_name, risk_profile, total_assets, kyc_expiry_date');
 
       const { data: orders } = await supabase
         .from('orders')
@@ -68,9 +70,45 @@ export const AlertsPanel = () => {
         .select('name, current_amount, target_amount, client_id');
 
       const generatedAlerts: Alert[] = [];
+      const today = new Date();
+      const thirtyDaysFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
 
       // Generate alerts based on real data
       if (clients && clients.length > 0) {
+        // KYC Expiry alerts - high priority compliance alerts
+        const expiringKYC = clients.filter(c => {
+          if (!c.kyc_expiry_date) return false;
+          const expiryDate = new Date(c.kyc_expiry_date);
+          return expiryDate <= thirtyDaysFromNow;
+        });
+
+        if (expiringKYC.length > 0) {
+          const expiredCount = expiringKYC.filter(c => new Date(c.kyc_expiry_date!) <= today).length;
+          const expiringCount = expiringKYC.length - expiredCount;
+
+          if (expiredCount > 0) {
+            generatedAlerts.push({
+              id: 'kyc-expired',
+              title: 'KYC Documents Expired',
+              description: `${expiredCount} client(s) have expired KYC documents requiring immediate attention`,
+              type: 'compliance',
+              severity: 'high',
+              timestamp: new Date().toISOString()
+            });
+          }
+
+          if (expiringCount > 0) {
+            generatedAlerts.push({
+              id: 'kyc-expiring',
+              title: 'KYC Expiring Soon',
+              description: `${expiringCount} client(s) have KYC expiring within 30 days`,
+              type: 'compliance',
+              severity: 'medium',
+              timestamp: new Date().toISOString()
+            });
+          }
+        }
+
         // High concentration alert
         const highValueClients = clients.filter(c => Number(c.total_assets) > 20000000);
         if (highValueClients.length > 0) {
@@ -112,7 +150,7 @@ export const AlertsPanel = () => {
 
       // Goals progress alert
       if (goals && goals.length > 0) {
-        const behindGoals = goals.filter(g => 
+        const behindGoals = goals.filter(g =>
           (Number(g.current_amount) / Number(g.target_amount)) < 0.5
         );
         if (behindGoals.length > 0) {
@@ -170,7 +208,12 @@ export const AlertsPanel = () => {
             <h3 className="font-semibold">Active Alerts</h3>
             <p className="text-sm text-muted-foreground">Requiring attention</p>
           </div>
-          <Button variant="ghost" size="sm" className="text-primary">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-primary"
+            onClick={() => navigate('/compliance')}
+          >
             View All <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         </div>

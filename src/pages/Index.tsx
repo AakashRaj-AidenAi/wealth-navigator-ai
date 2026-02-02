@@ -73,10 +73,10 @@ const Dashboard = () => {
         alertsResult,
         todayOrdersResult
       ] = await Promise.all([
+        // Fetch ALL clients for accurate AUM calculation (no advisor filter)
         supabase
           .from('clients')
-          .select('total_assets')
-          .eq('advisor_id', user.id),
+          .select('total_assets'),
         supabase
           .from('orders')
           .select('id')
