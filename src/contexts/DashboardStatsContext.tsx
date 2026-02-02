@@ -49,7 +49,6 @@ export const DashboardStatsProvider = ({ children }: { children: ReactNode }) =>
         ordersResult,
         tasksResult,
         leadsResult,
-        complianceAlertsResult,
       ] = await Promise.all([
         // Fetch ALL clients for accurate count (no advisor filter)
         supabase.from('clients').select('id, total_assets, kyc_expiry_date'),
@@ -59,37 +58,27 @@ export const DashboardStatsProvider = ({ children }: { children: ReactNode }) =>
           .select('id')
           .eq('assigned_to', user.id)
           .in('status', ['todo', 'in_progress']),
+        // Fetch ALL leads (not filtered by assigned_to) to match Leads page
         supabase
           .from('leads')
           .select('id')
-          .eq('assigned_to', user.id)
           .not('stage', 'in', '("closed_won","lost")'),
-        // Fetch from compliance_alerts table
-        supabase.from('compliance_alerts').select('id').eq('is_resolved', false),
       ]);
 
       const clients = clientsResult.data || [];
       const orders = ordersResult.data || [];
       const tasks = tasksResult.data || [];
       const leads = leadsResult.data || [];
-      const complianceAlerts = complianceAlertsResult.data || [];
 
       // Calculate dynamic compliance alerts from KYC expiry dates
       const today = new Date();
       const thirtyDaysFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-      let dynamicAlertsCount = 0;
-      clients.forEach(client => {
-        if (client.kyc_expiry_date) {
-          const expiryDate = new Date(client.kyc_expiry_date);
-          if (expiryDate <= thirtyDaysFromNow) {
-            dynamicAlertsCount++;
-          }
-        }
-      });
-
-      // Use the higher count between table alerts and dynamic alerts
-      const alertsCount = Math.max(complianceAlerts.length, dynamicAlertsCount);
+      const alertsCount = clients.filter(client => {
+        if (!client.kyc_expiry_date) return false;
+        const expiryDate = new Date(client.kyc_expiry_date);
+        return expiryDate <= thirtyDaysFromNow;
+      }).length;
 
       const totalAUM = clients.reduce((sum, c) => sum + (Number(c.total_assets) || 0), 0);
 

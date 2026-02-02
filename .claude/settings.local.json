@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(npm run dev:*)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nFix AI Copilot to use OpenAI API and force tool usage\n\n- Switch from Lovable AI Gateway to OpenAI API \\(gpt-4o\\)\n- Set tool_choice to \"required\" to force database queries\n- Add anti-fabrication rules in system prompt\n- Fix invalid config.toml keys\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nFix AI Copilot to use OpenAI API and force tool usage\n\n- Switch from Lovable AI Gateway to OpenAI API \\(gpt-4o\\)\n- Set tool_choice to \"required\" to force database queries\n- Add anti-fabrication rules in system prompt\n- Fix invalid config.toml keys\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "Bash(git reset:*)",
+      "Bash(git checkout:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

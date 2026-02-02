@@ -70,13 +70,12 @@ const Dashboard = () => {
         ordersResult,
         tasksResult,
         leadsResult,
-        alertsResult,
         todayOrdersResult
       ] = await Promise.all([
         // Fetch ALL clients for accurate AUM calculation (no advisor filter)
         supabase
           .from('clients')
-          .select('total_assets'),
+          .select('total_assets, kyc_expiry_date'),
         supabase
           .from('orders')
           .select('id')
@@ -86,15 +85,11 @@ const Dashboard = () => {
           .select('id')
           .eq('assigned_to', user.id)
           .in('status', ['todo', 'in_progress']),
+        // Fetch ALL leads (not filtered by assigned_to) to match Leads page
         supabase
           .from('leads')
-          .select('id, expected_value')
-          .eq('assigned_to', user.id)
+          .select('id, expected_value, stage')
           .not('stage', 'in', '("closed_won","lost")'),
-        supabase
-          .from('compliance_alerts')
-          .select('id')
-          .eq('is_resolved', false),
         supabase
           .from('orders')
           .select('order_type, total_amount, created_at')
@@ -106,10 +101,17 @@ const Dashboard = () => {
       const orders = ordersResult.data || [];
       const tasks = tasksResult.data || [];
       const leads = leadsResult.data || [];
-      const alerts = alertsResult.data || [];
       const todayOrders = todayOrdersResult.data || [];
 
       const totalAUM = clients.reduce((sum, c) => sum + (Number(c.total_assets) || 0), 0);
+
+      // Calculate dynamic alerts count from KYC expiry dates (matching ComplianceAlerts.tsx logic)
+      const thirtyDaysFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const alertsCount = clients.filter(c => {
+        if (!c.kyc_expiry_date) return false;
+        const expiryDate = new Date(c.kyc_expiry_date);
+        return expiryDate <= thirtyDaysFromNow;
+      }).length;
       
       // Calculate daily inflow/outflow from today's orders
       const dailyInflow = todayOrders
@@ -129,7 +131,7 @@ const Dashboard = () => {
         pendingOrders: orders.length,
         pendingTasks: tasks.length,
         activeLeads: leads.length,
-        alertsCount: alerts.length,
+        alertsCount,
         dailyInflow,
         dailyOutflow,
         revenue: estimatedDailyRevenue
