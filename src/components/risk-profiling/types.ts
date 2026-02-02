@@ -55,11 +55,11 @@ export const RISK_QUESTIONS: RiskQuestion[] = [
     category: 'financial_capacity',
     question: 'What is your current annual household income?',
     options: [
-      { label: 'Less than ₹5 Lakhs', score: 1 },
-      { label: '₹5-15 Lakhs', score: 2 },
-      { label: '₹15-30 Lakhs', score: 3 },
-      { label: '₹30-50 Lakhs', score: 4 },
-      { label: 'More than ₹50 Lakhs', score: 5 },
+      { label: 'Less than $50,000', score: 1 },
+      { label: '$50,000 - $150,000', score: 2 },
+      { label: '$150,000 - $300,000', score: 3 },
+      { label: '$300,000 - $500,000', score: 4 },
+      { label: 'More than $500,000', score: 5 },
     ],
   },
   {

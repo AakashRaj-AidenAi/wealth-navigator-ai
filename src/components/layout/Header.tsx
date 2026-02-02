@@ -23,10 +23,10 @@ const roleLabels: Record<string, string> = {
 
 // Static market data (could be replaced with real API later)
 const marketTicker = [
-  { symbol: 'NIFTY', price: 22456.80, changePercent: 0.45 },
-  { symbol: 'SENSEX', price: 73852.94, changePercent: 0.38 },
-  { symbol: 'GOLD', price: 62450.00, changePercent: -0.12 },
-  { symbol: 'USD/INR', price: 83.12, changePercent: 0.05 },
+  { symbol: 'S&P 500', price: 5021.84, changePercent: 0.45 },
+  { symbol: 'NASDAQ', price: 15990.66, changePercent: 0.62 },
+  { symbol: 'DOW', price: 38996.39, changePercent: 0.38 },
+  { symbol: 'GOLD', price: 2035.40, changePercent: -0.12 },
 ];
 
 export const Header = () => {
