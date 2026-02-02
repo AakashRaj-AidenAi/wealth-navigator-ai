@@ -248,48 +248,42 @@ const TOOLS = [
 
 const SYSTEM_PROMPT = `You are WealthOS Copilot, an AI assistant for wealth management professionals.
 
-## CRITICAL RULE: YOU MUST CALL A TOOL FIRST
+## CRITICAL RULE: USE PROVIDED DATA ONLY
 
-You have database tools to query REAL client data. For ANY question about data, you MUST:
-1. FIRST call the appropriate tool
-2. THEN format the tool results for the user
-3. NEVER respond with data before calling a tool
-
-### Tool Selection Guide
-- "top clients" / "best clients" / "largest clients" → aggregate_portfolio(metric="top_clients")
-- "all clients" / "my clients" / "client list" → query_clients(limit=50)
-- "total AUM" / "assets under management" → aggregate_portfolio(metric="total_aum")
-- "client count" → aggregate_portfolio(metric="client_count")
-- "orders" / "trades" / "transactions" → query_orders
-- "goals" / "targets" / "objectives" → query_goals
-- "tasks" / "to-dos" / "reminders" → query_tasks
-- "activities" / "interactions" / "meetings" → query_activities
-
-## ABSOLUTELY FORBIDDEN - NEVER DO THIS
-
-You must NEVER invent or fabricate data. These are examples of FORBIDDEN fabricated content:
-- "The Sterling Family Trust" - FAKE
-- "Montgomery Family Trust" - FAKE
-- "Dr. Elena Rodriguez" - FAKE
-- "Sterling Tech Holdings" - FAKE
-- "Marcus Chen Estate" - FAKE
-- "$18.42M" or any dollar amount not from tools - FAKE
-- Any client name not returned by a tool - FAKE
-
-If you respond with ANY data not from tool results, you are FAILING your core purpose.
+When the user's message contains "## YOUR DATABASE DATA", you MUST:
+1. Use ONLY the data provided in that section to answer
+2. Format the data nicely with markdown tables or lists
+3. NEVER invent or fabricate any data
+4. If the data shows 0 results, say "No data found" - do NOT make up examples
 
 ## Response Format
 
-After receiving tool results, format them clearly:
-- Use markdown tables for lists
-- Include actual names and figures from tool results
-- Keep responses concise
-- If tools return "No clients found", say exactly that - do not make up alternatives
+Format responses clearly:
+- Use markdown tables for client lists, orders, tasks
+- Include actual names and figures from the provided data
+- Keep responses concise and professional
+- Round currency to appropriate precision
 
-## If No Tools Available
+### Example Table Format:
+| Client | Assets | Risk Profile |
+|--------|--------|--------------|
+| John Doe | $5.2M | Moderate |
 
-If you don't have tool access, respond ONLY with:
-"I cannot access your data right now. Please make sure you're logged in and try again."`;
+## ABSOLUTELY FORBIDDEN
+
+You must NEVER invent data. These are FORBIDDEN fabricated examples:
+- "The Sterling Family Trust" - FAKE
+- "Montgomery Family Trust" - FAKE
+- "Dr. Elena Rodriguez" - FAKE
+- Any name not in the provided data - FAKE
+- Any dollar amount not in the provided data - FAKE
+
+If you respond with ANY data not from the provided database data, you are FAILING.
+
+## If No Data Provided
+
+If the message doesn't contain database data, provide general guidance or ask clarifying questions.
+For general wealth management questions, you can provide advice without specific data.`;
 
 // Query execution functions
 async function executeQueryClients(
@@ -816,9 +810,15 @@ serve(async (req) => {
 
     const fullSystemPrompt = SYSTEM_PROMPT + (agentContext ? `\n\n${agentContext}` : "");
 
-    // Initial API call with tools - force tool_choice: "required" to prevent fabrication
-    console.log(`Sending request to AI. User authenticated: ${!!userId}, Tools: ${TOOLS.length}`);
+    // Check if the message contains database data (frontend already queried it)
+    const lastMessage = messages[messages.length - 1];
+    const hasProvidedData = lastMessage?.content?.includes('## YOUR DATABASE DATA');
+
+    console.log(`Sending request to AI. User authenticated: ${!!userId}, Has provided data: ${hasProvidedData}`);
     let toolCallsMade = 0;
+
+    // If data is already provided, don't use tools - just format the response
+    const useTools = !hasProvidedData && userId && supabaseAdmin;
 
     let response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -832,8 +832,7 @@ serve(async (req) => {
           { role: "system", content: fullSystemPrompt },
           ...messages,
         ],
-        tools: TOOLS,
-        tool_choice: "required", // Force tool usage - AI MUST call a tool first
+        ...(useTools ? { tools: TOOLS, tool_choice: "auto" } : {}),
         stream: false,
       }),
     });

@@ -26,6 +26,166 @@ import {
   ChevronRight,
 } from 'lucide-react';
 
+// Helper to format currency
+const formatCurrency = (amount: number): string => {
+  if (amount >= 1000000000) return `$${(amount / 1000000000).toFixed(2)}B`;
+  if (amount >= 1000000) return `$${(amount / 1000000).toFixed(2)}M`;
+  if (amount >= 1000) return `$${(amount / 1000).toFixed(1)}K`;
+  return `$${amount.toLocaleString('en-US')}`;
+};
+
+// Query patterns to detect what data the user wants
+const detectQueryType = (query: string): string[] => {
+  const q = query.toLowerCase();
+  const types: string[] = [];
+
+  // Client-related queries
+  if (q.includes('client') || q.includes('top') || q.includes('aum') ||
+      q.includes('asset') || q.includes('portfolio') || q.includes('wealth') ||
+      q.includes('million') || q.includes('$') || q.includes('risk')) {
+    types.push('clients');
+  }
+
+  // Order-related queries
+  if (q.includes('order') || q.includes('trade') || q.includes('buy') ||
+      q.includes('sell') || q.includes('transaction') || q.includes('pending')) {
+    types.push('orders');
+  }
+
+  // Task-related queries
+  if (q.includes('task') || q.includes('todo') || q.includes('overdue') ||
+      q.includes('reminder') || q.includes('due') || q.includes('action')) {
+    types.push('tasks');
+  }
+
+  // Goal-related queries
+  if (q.includes('goal') || q.includes('target') || q.includes('objective') ||
+      q.includes('progress')) {
+    types.push('goals');
+  }
+
+  // Activity-related queries
+  if (q.includes('activity') || q.includes('meeting') || q.includes('call') ||
+      q.includes('email') || q.includes('interaction')) {
+    types.push('activities');
+  }
+
+  return types.length > 0 ? types : ['clients']; // Default to clients
+};
+
+// Fetch data from database based on query type
+const fetchDatabaseData = async (queryTypes: string[]): Promise<Record<string, unknown>> => {
+  const data: Record<string, unknown> = {};
+
+  for (const type of queryTypes) {
+    switch (type) {
+      case 'clients': {
+        const { data: clients, error } = await supabase
+          .from('clients')
+          .select('id, client_name, email, phone, total_assets, risk_profile, status, created_at')
+          .order('total_assets', { ascending: false })
+          .limit(50);
+
+        if (!error && clients) {
+          data.clients = clients.map(c => ({
+            ...c,
+            total_assets_formatted: formatCurrency(Number(c.total_assets) || 0)
+          }));
+          data.total_aum = clients.reduce((sum, c) => sum + (Number(c.total_assets) || 0), 0);
+          data.total_aum_formatted = formatCurrency(data.total_aum as number);
+          data.client_count = clients.length;
+        }
+        break;
+      }
+
+      case 'orders': {
+        const { data: clients } = await supabase
+          .from('clients')
+          .select('id, client_name');
+
+        const clientMap = new Map(clients?.map(c => [c.id, c.client_name]) || []);
+
+        const { data: orders, error } = await supabase
+          .from('orders')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        if (!error && orders) {
+          data.orders = orders.map(o => ({
+            ...o,
+            client_name: clientMap.get(o.client_id) || 'Unknown'
+          }));
+        }
+        break;
+      }
+
+      case 'tasks': {
+        const { data: tasks, error } = await supabase
+          .from('tasks')
+          .select('*, clients(client_name)')
+          .order('due_date', { ascending: true })
+          .limit(50);
+
+        if (!error && tasks) {
+          data.tasks = tasks;
+          data.overdue_tasks = tasks.filter(t => {
+            if (!t.due_date || t.status === 'done' || t.status === 'cancelled') return false;
+            return new Date(t.due_date) < new Date();
+          });
+        }
+        break;
+      }
+
+      case 'goals': {
+        const { data: clients } = await supabase
+          .from('clients')
+          .select('id, client_name');
+
+        const clientMap = new Map(clients?.map(c => [c.id, c.client_name]) || []);
+
+        const { data: goals, error } = await supabase
+          .from('goals')
+          .select('*')
+          .limit(50);
+
+        if (!error && goals) {
+          data.goals = goals.map(g => ({
+            ...g,
+            client_name: clientMap.get(g.client_id) || 'Unknown',
+            progress: g.target_amount > 0 ? Math.round(((g.current_amount || 0) / g.target_amount) * 100) : 0
+          }));
+        }
+        break;
+      }
+
+      case 'activities': {
+        const { data: clients } = await supabase
+          .from('clients')
+          .select('id, client_name');
+
+        const clientMap = new Map(clients?.map(c => [c.id, c.client_name]) || []);
+
+        const { data: activities, error } = await supabase
+          .from('client_activities')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        if (!error && activities) {
+          data.activities = activities.map(a => ({
+            ...a,
+            client_name: clientMap.get(a.client_id) || 'Unknown'
+          }));
+        }
+        break;
+      }
+    }
+  }
+
+  return data;
+};
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -102,6 +262,25 @@ const Copilot = () => {
       // Get the authenticated user's session token for database access
       const { data: { session } } = await supabase.auth.getSession();
 
+      // Detect what data the user is asking about and fetch it from the database
+      const queryTypes = detectQueryType(textToSend);
+      console.log('Detected query types:', queryTypes);
+
+      const databaseData = await fetchDatabaseData(queryTypes);
+      console.log('Fetched database data:', databaseData);
+
+      // Build context with the actual database data
+      let dataContext = "";
+      if (Object.keys(databaseData).length > 0) {
+        dataContext = `\n\n## YOUR DATABASE DATA (USE THIS TO ANSWER):\n${JSON.stringify(databaseData, null, 2)}\n\nIMPORTANT: The above is REAL data from the user's database. Use ONLY this data to answer their question. Format it nicely with tables or lists.`;
+      }
+
+      // Prepare the message with data context
+      const enrichedUserMessage = {
+        role: 'user',
+        content: textToSend + dataContext
+      };
+
       const resp = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
@@ -109,7 +288,7 @@ const Copilot = () => {
           Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
-          messages: [...messages, userMessage].map(m => ({ role: m.role, content: m.content })),
+          messages: [...messages.map(m => ({ role: m.role, content: m.content })), enrichedUserMessage],
           agentType: selectedAgent
         }),
       });
