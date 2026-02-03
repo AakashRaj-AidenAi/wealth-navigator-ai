@@ -1128,6 +1128,50 @@ export type Database = {
           },
         ]
       }
+      lead_stage_history: {
+        Row: {
+          changed_at: string
+          changed_by: string
+          created_at: string
+          duration_in_stage: unknown
+          id: string
+          lead_id: string
+          new_stage: string
+          notes: string | null
+          previous_stage: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by: string
+          created_at?: string
+          duration_in_stage?: unknown
+          id?: string
+          lead_id: string
+          new_stage: string
+          notes?: string | null
+          previous_stage: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string
+          created_at?: string
+          duration_in_stage?: unknown
+          id?: string
+          lead_id?: string
+          new_stage?: string
+          notes?: string | null
+          previous_stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_stage_history_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           assigned_to: string
@@ -1135,11 +1179,14 @@ export type Database = {
           converted_client_id: string | null
           created_at: string
           email: string | null
+          expected_close_date: string | null
           expected_value: number | null
           id: string
           last_activity_at: string | null
           lead_score: number | null
+          loss_reason: string | null
           name: string
+          next_follow_up: string | null
           notes: string | null
           phone: string | null
           probability: number | null
@@ -1153,11 +1200,14 @@ export type Database = {
           converted_client_id?: string | null
           created_at?: string
           email?: string | null
+          expected_close_date?: string | null
           expected_value?: number | null
           id?: string
           last_activity_at?: string | null
           lead_score?: number | null
+          loss_reason?: string | null
           name: string
+          next_follow_up?: string | null
           notes?: string | null
           phone?: string | null
           probability?: number | null
@@ -1171,11 +1221,14 @@ export type Database = {
           converted_client_id?: string | null
           created_at?: string
           email?: string | null
+          expected_close_date?: string | null
           expected_value?: number | null
           id?: string
           last_activity_at?: string | null
           lead_score?: number | null
+          loss_reason?: string | null
           name?: string
+          next_follow_up?: string | null
           notes?: string | null
           phone?: string | null
           probability?: number | null

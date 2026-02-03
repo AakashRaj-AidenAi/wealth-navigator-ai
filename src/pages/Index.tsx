@@ -9,6 +9,7 @@ import { PerformanceChart } from '@/components/dashboard/PerformanceChart';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import { TodaysPlanWidget } from '@/components/dashboard/TodaysPlanWidget';
 import { LeadsPipelineWidget } from '@/components/dashboard/LeadsPipelineWidget';
+import { LeadsNeedingAttentionWidget } from '@/components/dashboard/LeadsNeedingAttentionWidget';
 import { CorporateActionsWidget } from '@/components/dashboard/CorporateActionsWidget';
 import { AIInsightsCenter } from '@/components/ai-growth-engine';
 import { AICopilot } from '@/components/ai/AICopilot';
@@ -254,8 +255,9 @@ const Dashboard = () => {
         </div>
 
         {/* Bottom Row - Activity & Tasks */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <LeadsPipelineWidget />
+          <LeadsNeedingAttentionWidget />
           <TodaysPlanWidget />
           <ActivityFeed />
         </div>
