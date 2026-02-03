@@ -1,3 +1,6 @@
+// This component is deprecated - using LeadQuickActionsDrawer instead
+// Keeping for backwards compatibility
+
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -37,11 +40,11 @@ const stageLabels: Record<string, string> = {
 
 const stageColors: Record<string, string> = {
   new: 'bg-blue-500',
-  contacted: 'bg-purple-500',
+  contacted: 'bg-cyan-500',
   meeting: 'bg-amber-500',
-  proposal: 'bg-orange-500',
-  closed_won: 'bg-green-500',
-  lost: 'bg-red-500'
+  proposal: 'bg-purple-500',
+  closed_won: 'bg-success',
+  lost: 'bg-destructive'
 };
 
 export const LeadDetailModal = ({ lead, onClose, onUpdate }: LeadDetailModalProps) => {
@@ -104,7 +107,6 @@ export const LeadDetailModal = ({ lead, onClose, onUpdate }: LeadDetailModalProp
 
     setAddingNote(true);
 
-    // Add activity
     await supabase.from('lead_activities').insert({
       lead_id: lead.id,
       activity_type: 'note',
@@ -113,7 +115,6 @@ export const LeadDetailModal = ({ lead, onClose, onUpdate }: LeadDetailModalProp
       created_by: user.id
     });
 
-    // Update last activity
     await supabase
       .from('leads')
       .update({ last_activity_at: new Date().toISOString() })
@@ -221,7 +222,6 @@ export const LeadDetailModal = ({ lead, onClose, onUpdate }: LeadDetailModalProp
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4 mt-4">
-            {/* Contact Info */}
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 rounded-lg bg-secondary/30">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
@@ -239,7 +239,6 @@ export const LeadDetailModal = ({ lead, onClose, onUpdate }: LeadDetailModalProp
               </div>
             </div>
 
-            {/* Financial Info */}
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 rounded-lg bg-secondary/30">
                 <p className="text-sm text-muted-foreground mb-1">Expected Value</p>
@@ -254,7 +253,6 @@ export const LeadDetailModal = ({ lead, onClose, onUpdate }: LeadDetailModalProp
               </div>
             </div>
 
-            {/* Dates */}
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 rounded-lg bg-secondary/30">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
@@ -277,7 +275,6 @@ export const LeadDetailModal = ({ lead, onClose, onUpdate }: LeadDetailModalProp
               </div>
             </div>
 
-            {/* Notes */}
             {lead.notes && (
               <div className="p-4 rounded-lg bg-secondary/30">
                 <p className="text-sm text-muted-foreground mb-2">Notes</p>
@@ -287,7 +284,6 @@ export const LeadDetailModal = ({ lead, onClose, onUpdate }: LeadDetailModalProp
           </TabsContent>
 
           <TabsContent value="activity" className="mt-4">
-            {/* Add Note */}
             <div className="flex gap-2 mb-4">
               <Textarea
                 value={newNote}
@@ -305,7 +301,6 @@ export const LeadDetailModal = ({ lead, onClose, onUpdate }: LeadDetailModalProp
               </Button>
             </div>
 
-            {/* Activity Timeline */}
             <ScrollArea className="h-[300px]">
               {loadingActivities ? (
                 <div className="flex items-center justify-center py-8">
@@ -344,3 +339,4 @@ export const LeadDetailModal = ({ lead, onClose, onUpdate }: LeadDetailModalProp
     </Dialog>
   );
 };
+
