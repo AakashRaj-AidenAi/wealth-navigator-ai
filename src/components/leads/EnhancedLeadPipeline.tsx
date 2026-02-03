@@ -47,11 +47,25 @@ export const EnhancedLeadPipeline = ({
 
   const handleDragStart = useCallback((e: React.DragEvent, leadId: string, lead: Lead) => {
     // Don't allow dragging converted leads
-    if (lead.stage === 'closed_won' && lead.converted_client_id) return;
+    if (lead.stage === 'closed_won' && lead.converted_client_id) {
+      e.preventDefault();
+      return;
+    }
     
+    e.stopPropagation();
     setDraggedLead(leadId);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', leadId);
+    
+    // Set a drag image (optional but helps with visual feedback)
+    if (e.currentTarget instanceof HTMLElement) {
+      e.dataTransfer.setDragImage(e.currentTarget, 20, 20);
+    }
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedLead(null);
+    setDragOverStage(null);
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent, stage: LeadStage) => {
@@ -165,40 +179,41 @@ export const EnhancedLeadPipeline = ({
                 const overdueFollowUp = hasOverdueFollowUp(lead);
                 const isDragging = draggedLead === lead.id;
                 
-                return (
-                  <div
-                    key={lead.id}
-                    draggable={!isConverted}
-                    onDragStart={(e) => handleDragStart(e, lead.id, lead)}
-                    className={cn(
-                      'p-3 rounded-lg bg-background border cursor-pointer transition-all duration-200',
-                      'hover:shadow-lg hover:border-primary/30 hover:-translate-y-0.5',
-                      isDragging && 'opacity-50 scale-95',
-                      isConverted && 'border-success/30 bg-success/5',
-                      isLost && 'border-destructive/30 bg-destructive/5 opacity-75',
-                      urgency === 'high' && !isConverted && !isLost && 'border-l-4 border-l-amber-500',
-                      overdueFollowUp && 'ring-1 ring-destructive/50'
-                    )}
-                  >
-                    {/* Card Header */}
-                    <div className="flex items-start gap-2">
-                      {isConverted ? (
-                        <Lock className="h-4 w-4 text-success flex-shrink-0 mt-0.5" />
-                      ) : (
-                        <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5 cursor-grab active:cursor-grabbing" />
+                  return (
+                    <div
+                      key={lead.id}
+                      draggable={!isConverted && !isLost}
+                      onDragStart={(e) => handleDragStart(e, lead.id, lead)}
+                      onDragEnd={handleDragEnd}
+                      onClick={() => onLeadClick(lead)}
+                      className={cn(
+                        'p-3 rounded-lg bg-background border transition-all duration-200',
+                        !isConverted && !isLost && 'cursor-grab active:cursor-grabbing',
+                        isConverted && 'cursor-pointer',
+                        'hover:shadow-lg hover:border-primary/30 hover:-translate-y-0.5',
+                        isDragging && 'opacity-50 scale-95 cursor-grabbing',
+                        isConverted && 'border-success/30 bg-success/5',
+                        isLost && 'border-destructive/30 bg-destructive/5 opacity-75',
+                        urgency === 'high' && !isConverted && !isLost && 'border-l-4 border-l-amber-500',
+                        overdueFollowUp && 'ring-1 ring-destructive/50'
                       )}
-                      <div 
-                        className="flex-1 min-w-0"
-                        onClick={() => onLeadClick(lead)}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <h4 className="font-medium text-sm truncate">{lead.name}</h4>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="icon" className="h-6 w-6">
-                                <MoreVertical className="h-3 w-3" />
-                              </Button>
-                            </DropdownMenuTrigger>
+                    >
+                      {/* Card Header */}
+                      <div className="flex items-start gap-2">
+                        {isConverted ? (
+                          <Lock className="h-4 w-4 text-success flex-shrink-0 mt-0.5" />
+                        ) : (
+                          <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <h4 className="font-medium text-sm truncate">{lead.name}</h4>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" className="h-6 w-6">
+                                  <MoreVertical className="h-3 w-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => onQuickAction(lead, 'call')}>
                                 <Phone className="h-4 w-4 mr-2" />
@@ -250,7 +265,7 @@ export const EnhancedLeadPipeline = ({
                             </Badge>
                           )}
                           {urgency === 'high' && !isConverted && !isLost && !overdueFollowUp && (
-                            <Badge variant="outline" className="text-amber-500 border-amber-500/50 text-xs px-1.5 py-0">
+                            <Badge variant="outline" className="text-warning border-warning/50 text-xs px-1.5 py-0">
                               Needs Attention
                             </Badge>
                           )}
