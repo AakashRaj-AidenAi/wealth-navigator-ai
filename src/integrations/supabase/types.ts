@@ -100,6 +100,63 @@ export type Database = {
         }
         Relationships: []
       }
+      campaign_message_logs: {
+        Row: {
+          campaign_id: string
+          channel: string
+          client_id: string
+          content: string | null
+          created_at: string
+          delivered_at: string | null
+          error_message: string | null
+          id: string
+          sent_at: string | null
+          status: string
+          subject: string | null
+        }
+        Insert: {
+          campaign_id: string
+          channel: string
+          client_id: string
+          content?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          error_message?: string | null
+          id?: string
+          sent_at?: string | null
+          status?: string
+          subject?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          channel?: string
+          client_id?: string
+          content?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          error_message?: string | null
+          id?: string
+          sent_at?: string | null
+          status?: string
+          subject?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_message_logs_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_message_logs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaign_recipients: {
         Row: {
           campaign_id: string
@@ -186,6 +243,90 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      campaigns_v2: {
+        Row: {
+          attachment_paths: string[] | null
+          channel: string
+          completed_at: string | null
+          content: string
+          created_at: string
+          created_by: string
+          description: string | null
+          failed_count: number | null
+          id: string
+          name: string
+          scheduled_at: string | null
+          segment_id: string | null
+          sent_at: string | null
+          sent_count: number | null
+          status: string
+          subject: string | null
+          template_id: string | null
+          total_recipients: number | null
+          updated_at: string
+          variables_used: string[] | null
+        }
+        Insert: {
+          attachment_paths?: string[] | null
+          channel?: string
+          completed_at?: string | null
+          content?: string
+          created_at?: string
+          created_by: string
+          description?: string | null
+          failed_count?: number | null
+          id?: string
+          name: string
+          scheduled_at?: string | null
+          segment_id?: string | null
+          sent_at?: string | null
+          sent_count?: number | null
+          status?: string
+          subject?: string | null
+          template_id?: string | null
+          total_recipients?: number | null
+          updated_at?: string
+          variables_used?: string[] | null
+        }
+        Update: {
+          attachment_paths?: string[] | null
+          channel?: string
+          completed_at?: string | null
+          content?: string
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          failed_count?: number | null
+          id?: string
+          name?: string
+          scheduled_at?: string | null
+          segment_id?: string | null
+          sent_at?: string | null
+          sent_count?: number | null
+          status?: string
+          subject?: string | null
+          template_id?: string | null
+          total_recipients?: number | null
+          updated_at?: string
+          variables_used?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaigns_v2_segment_id_fkey"
+            columns: ["segment_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_segments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaigns_v2_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "message_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       client_activities: {
         Row: {
