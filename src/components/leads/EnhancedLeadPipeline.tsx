@@ -145,6 +145,7 @@ export const EnhancedLeadPipeline = ({
               'flex-shrink-0 w-72 rounded-xl transition-all duration-200',
               isDragOver && 'ring-2 ring-primary scale-[1.02]'
             )}
+            // Keep handlers here for broad compatibility
             onDragOver={(e) => handleDragOver(e, stage.id)}
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, stage.id)}
@@ -167,19 +168,24 @@ export const EnhancedLeadPipeline = ({
               </p>
             </div>
 
-            {/* Cards Container */}
-            <div className={cn(
-              'p-2 space-y-2 min-h-[400px] rounded-b-xl transition-colors',
-              isDragOver ? 'bg-primary/5' : 'bg-secondary/20'
-            )}>
+            {/* Cards Container (the real drop zone) */}
+            <div
+              className={cn(
+                'p-2 space-y-2 min-h-[400px] rounded-b-xl transition-colors',
+                isDragOver ? 'bg-primary/5' : 'bg-secondary/20'
+              )}
+              onDragOver={(e) => handleDragOver(e, stage.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, stage.id)}
+            >
               {stageLeads.map((lead) => {
                 const isConverted = lead.stage === 'closed_won' && lead.converted_client_id;
                 const isLost = lead.stage === 'lost';
                 const urgency = getLeadUrgency(lead);
                 const overdueFollowUp = hasOverdueFollowUp(lead);
                 const isDragging = draggedLead === lead.id;
-                
-                  return (
+
+                return (
                     <div
                       key={lead.id}
                       draggable={!isConverted && !isLost}
