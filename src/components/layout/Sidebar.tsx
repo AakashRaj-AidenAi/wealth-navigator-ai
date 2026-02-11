@@ -20,6 +20,7 @@ import {
   Send,
   Landmark,
   Megaphone,
+  CircleDollarSign,
 } from 'lucide-react';
 
 interface NavItem {
@@ -43,6 +44,7 @@ const mainNavItems: NavItem[] = [
   { label: 'Campaigns', icon: Megaphone, href: '/campaigns' },
   { label: 'Compliance', icon: Shield, href: '/compliance', badge: 2 },
   { label: 'Reports', icon: BarChart3, href: '/reports' },
+  { label: 'Business', icon: CircleDollarSign, href: '/business' },
 ];
 
 const secondaryNavItems: NavItem[] = [

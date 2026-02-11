@@ -375,6 +375,47 @@ export type Database = {
           },
         ]
       }
+      client_aum: {
+        Row: {
+          client_id: string
+          created_at: string
+          current_aum: number | null
+          debt_aum: number | null
+          equity_aum: number | null
+          id: string
+          last_updated: string
+          other_assets: number | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          current_aum?: number | null
+          debt_aum?: number | null
+          equity_aum?: number | null
+          id?: string
+          last_updated?: string
+          other_assets?: number | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          current_aum?: number | null
+          debt_aum?: number | null
+          equity_aum?: number | null
+          id?: string
+          last_updated?: string
+          other_assets?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_aum_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_consents: {
         Row: {
           client_id: string
@@ -916,6 +957,47 @@ export type Database = {
           },
         ]
       }
+      commission_records: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          payout_date: string | null
+          product_name: string
+          trail_commission: number | null
+          updated_at: string
+          upfront_commission: number | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          payout_date?: string | null
+          product_name: string
+          trail_commission?: number | null
+          updated_at?: string
+          upfront_commission?: number | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          payout_date?: string | null
+          product_name?: string
+          trail_commission?: number | null
+          updated_at?: string
+          upfront_commission?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commission_records_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       communication_campaigns: {
         Row: {
           channel: string
@@ -1267,6 +1349,56 @@ export type Database = {
           },
         ]
       }
+      invoices: {
+        Row: {
+          advisor_id: string
+          amount: number
+          client_id: string
+          created_at: string
+          due_date: string | null
+          gst: number | null
+          id: string
+          invoice_number: string | null
+          status: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          advisor_id: string
+          amount?: number
+          client_id: string
+          created_at?: string
+          due_date?: string | null
+          gst?: number | null
+          id?: string
+          invoice_number?: string | null
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          advisor_id?: string
+          amount?: number
+          client_id?: string
+          created_at?: string
+          due_date?: string | null
+          gst?: number | null
+          id?: string
+          invoice_number?: string | null
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_activities: {
         Row: {
           activity_type: string
@@ -1530,6 +1662,41 @@ export type Database = {
           },
         ]
       }
+      payments: {
+        Row: {
+          amount_received: number
+          created_at: string
+          id: string
+          invoice_id: string
+          payment_date: string
+          payment_mode: string
+        }
+        Insert: {
+          amount_received?: number
+          created_at?: string
+          id?: string
+          invoice_id: string
+          payment_date?: string
+          payment_mode?: string
+        }
+        Update: {
+          amount_received?: number
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          payment_date?: string
+          payment_mode?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1589,6 +1756,50 @@ export type Database = {
           title?: string
         }
         Relationships: []
+      }
+      revenue_records: {
+        Row: {
+          amount: number
+          client_id: string
+          created_at: string
+          date: string
+          id: string
+          product_type: string
+          recurring: boolean | null
+          revenue_type: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          client_id: string
+          created_at?: string
+          date?: string
+          id?: string
+          product_type: string
+          recurring?: boolean | null
+          revenue_type?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          client_id?: string
+          created_at?: string
+          date?: string
+          id?: string
+          product_type?: string
+          recurring?: boolean | null
+          revenue_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revenue_records_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       risk_answers: {
         Row: {
