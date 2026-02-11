@@ -19,6 +19,7 @@ import {
   UserPlus,
   Send,
   Landmark,
+  Megaphone,
 } from 'lucide-react';
 
 interface NavItem {
@@ -39,6 +40,7 @@ const mainNavItems: NavItem[] = [
   { label: 'Corp Actions', icon: Landmark, href: '/corporate-actions' },
   { label: 'Orders', icon: FileCheck, href: '/orders', badge: 3 },
   { label: 'Communications', icon: Send, href: '/communications' },
+  { label: 'Campaigns', icon: Megaphone, href: '/campaigns' },
   { label: 'Compliance', icon: Shield, href: '/compliance', badge: 2 },
   { label: 'Reports', icon: BarChart3, href: '/reports' },
 ];
