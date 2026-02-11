@@ -24,6 +24,12 @@ import Leads from "./pages/Leads";
 import Communications from "./pages/Communications";
 import CorporateActions from "./pages/CorporateActions";
 import Campaigns from "./pages/Campaigns";
+import CEODashboard from "./pages/business/CEODashboard";
+import AUMOverview from "./pages/business/AUMOverview";
+import Revenue from "./pages/business/Revenue";
+import Commissions from "./pages/business/Commissions";
+import InvoicesPage from "./pages/business/Invoices";
+import Profitability from "./pages/business/Profitability";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -69,6 +75,12 @@ const AppRoutes = () => (
     <Route path="/communications" element={<ProtectedRoute><Communications /></ProtectedRoute>} />
     <Route path="/corporate-actions" element={<ProtectedRoute><CorporateActions /></ProtectedRoute>} />
     <Route path="/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
+    <Route path="/business" element={<ProtectedRoute><CEODashboard /></ProtectedRoute>} />
+    <Route path="/business/aum" element={<ProtectedRoute><AUMOverview /></ProtectedRoute>} />
+    <Route path="/business/revenue" element={<ProtectedRoute><Revenue /></ProtectedRoute>} />
+    <Route path="/business/commissions" element={<ProtectedRoute><Commissions /></ProtectedRoute>} />
+    <Route path="/business/invoices" element={<ProtectedRoute><InvoicesPage /></ProtectedRoute>} />
+    <Route path="/business/profitability" element={<ProtectedRoute><Profitability /></ProtectedRoute>} />
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
     <Route path="*" element={<NotFound />} />
   </Routes>
