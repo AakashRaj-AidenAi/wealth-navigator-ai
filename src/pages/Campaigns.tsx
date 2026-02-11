@@ -1,17 +1,11 @@
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, Users, PlusCircle, GitBranch, FileText, TrendingUp } from 'lucide-react';
+import { BarChart3, Users, PlusCircle, GitBranch, FileText, TrendingUp, History } from 'lucide-react';
 import { SegmentsList } from '@/components/campaigns/segments/SegmentsList';
-
-const tabItems = [
-  { value: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-  { value: 'segments', label: 'Segments', icon: Users },
-  { value: 'create', label: 'Create Campaign', icon: PlusCircle },
-  { value: 'workflows', label: 'Workflows', icon: GitBranch },
-  { value: 'templates', label: 'Templates', icon: FileText },
-  { value: 'analytics', label: 'Analytics', icon: TrendingUp },
-];
+import { CreateCampaign } from '@/components/campaigns/create/CreateCampaign';
+import { CampaignHistory } from '@/components/campaigns/history/CampaignHistory';
+import { useState } from 'react';
 
 const PlaceholderCard = ({ title, description }: { title: string; description: string }) => (
   <Card>
@@ -27,7 +21,19 @@ const PlaceholderCard = ({ title, description }: { title: string; description: s
   </Card>
 );
 
+const tabItems = [
+  { value: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+  { value: 'segments', label: 'Segments', icon: Users },
+  { value: 'create', label: 'Create Campaign', icon: PlusCircle },
+  { value: 'history', label: 'Campaign History', icon: History },
+  { value: 'workflows', label: 'Workflows', icon: GitBranch },
+  { value: 'templates', label: 'Templates', icon: FileText },
+  { value: 'analytics', label: 'Analytics', icon: TrendingUp },
+];
+
 const Campaigns = () => {
+  const [activeTab, setActiveTab] = useState('dashboard');
+
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -36,7 +42,7 @@ const Campaigns = () => {
           <p className="text-muted-foreground">Manage client engagement campaigns, segments, and communication workflows.</p>
         </div>
 
-        <Tabs defaultValue="dashboard" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="flex flex-wrap h-auto gap-1">
             {tabItems.map((tab) => (
               <TabsTrigger key={tab.value} value={tab.value} className="flex items-center gap-2">
@@ -53,7 +59,10 @@ const Campaigns = () => {
             <SegmentsList />
           </TabsContent>
           <TabsContent value="create">
-            <PlaceholderCard title="Create Campaign" description="Set up new campaigns with targeting, messaging, and scheduling." />
+            <CreateCampaign onCreated={() => setActiveTab('history')} />
+          </TabsContent>
+          <TabsContent value="history">
+            <CampaignHistory />
           </TabsContent>
           <TabsContent value="workflows">
             <PlaceholderCard title="Workflows" description="Build automated engagement workflows and drip sequences." />
