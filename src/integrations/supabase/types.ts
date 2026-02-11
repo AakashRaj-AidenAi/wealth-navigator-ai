@@ -151,6 +151,42 @@ export type Database = {
           },
         ]
       }
+      campaign_segments: {
+        Row: {
+          client_count: number
+          created_at: string
+          created_by: string
+          description: string | null
+          filter_criteria: Json
+          id: string
+          is_auto_updating: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          client_count?: number
+          created_at?: string
+          created_by: string
+          description?: string | null
+          filter_criteria?: Json
+          id?: string
+          is_auto_updating?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          client_count?: number
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          filter_criteria?: Json
+          id?: string
+          is_auto_updating?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       client_activities: {
         Row: {
           activity_type: Database["public"]["Enums"]["activity_type"]
