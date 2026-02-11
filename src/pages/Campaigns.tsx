@@ -2,6 +2,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart3, Users, PlusCircle, GitBranch, FileText, TrendingUp } from 'lucide-react';
+import { SegmentsList } from '@/components/campaigns/segments/SegmentsList';
 
 const tabItems = [
   { value: 'dashboard', label: 'Dashboard', icon: BarChart3 },
@@ -49,7 +50,7 @@ const Campaigns = () => {
             <PlaceholderCard title="Campaign Dashboard" description="Overview of all active and past campaigns with key metrics." />
           </TabsContent>
           <TabsContent value="segments">
-            <PlaceholderCard title="Client Segments" description="Define and manage audience segments for targeted campaigns." />
+            <SegmentsList />
           </TabsContent>
           <TabsContent value="create">
             <PlaceholderCard title="Create Campaign" description="Set up new campaigns with targeting, messaging, and scheduling." />
