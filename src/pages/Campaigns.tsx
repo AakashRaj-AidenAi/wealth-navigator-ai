@@ -1,13 +1,15 @@
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, Users, PlusCircle, GitBranch, FileText, TrendingUp, History, ScrollText } from 'lucide-react';
+import { BarChart3, Users, PlusCircle, GitBranch, FileText, TrendingUp, History, ScrollText, Sparkles } from 'lucide-react';
 import { SegmentsList } from '@/components/campaigns/segments/SegmentsList';
 import { CreateCampaign } from '@/components/campaigns/create/CreateCampaign';
 import { CampaignHistory } from '@/components/campaigns/history/CampaignHistory';
 import { WorkflowBuilder } from '@/components/campaigns/workflows/WorkflowBuilder';
 import { WorkflowList } from '@/components/campaigns/workflows/WorkflowList';
 import { WorkflowLogs } from '@/components/campaigns/workflows/WorkflowLogs';
+import { CampaignDashboard } from '@/components/campaigns/ai/CampaignDashboard';
+import { AIContentGenerator } from '@/components/campaigns/ai/AIContentGenerator';
 import { useState } from 'react';
 
 const PlaceholderCard = ({ title, description }: { title: string; description: string }) => (
@@ -29,6 +31,7 @@ const tabItems = [
   { value: 'segments', label: 'Segments', icon: Users },
   { value: 'create', label: 'Create Campaign', icon: PlusCircle },
   { value: 'history', label: 'Campaign History', icon: History },
+  { value: 'ai-content', label: 'AI Content', icon: Sparkles },
   { value: 'workflows', label: 'Workflows', icon: GitBranch },
   { value: 'workflow-builder', label: 'New Workflow', icon: PlusCircle },
   { value: 'workflow-logs', label: 'Workflow Logs', icon: ScrollText },
@@ -38,6 +41,12 @@ const tabItems = [
 
 const Campaigns = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [aiContent, setAiContent] = useState('');
+
+  const handleAIContentInsert = (content: string) => {
+    setAiContent(content);
+    setActiveTab('create');
+  };
 
   return (
     <MainLayout>
@@ -58,16 +67,19 @@ const Campaigns = () => {
           </TabsList>
 
           <TabsContent value="dashboard">
-            <PlaceholderCard title="Campaign Dashboard" description="Overview of all active and past campaigns with key metrics." />
+            <CampaignDashboard />
           </TabsContent>
           <TabsContent value="segments">
             <SegmentsList />
           </TabsContent>
           <TabsContent value="create">
-            <CreateCampaign onCreated={() => setActiveTab('history')} />
+            <CreateCampaign onCreated={() => setActiveTab('history')} initialContent={aiContent} />
           </TabsContent>
           <TabsContent value="history">
             <CampaignHistory />
+          </TabsContent>
+          <TabsContent value="ai-content">
+            <AIContentGenerator onInsertContent={handleAIContentInsert} />
           </TabsContent>
           <TabsContent value="workflows">
             <WorkflowList />

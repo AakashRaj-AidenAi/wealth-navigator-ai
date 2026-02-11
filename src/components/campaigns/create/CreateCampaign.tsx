@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,9 +23,10 @@ const PERSONALIZATION_VARS = [
 
 interface CreateCampaignProps {
   onCreated?: () => void;
+  initialContent?: string;
 }
 
-export const CreateCampaign = ({ onCreated }: CreateCampaignProps) => {
+export const CreateCampaign = ({ onCreated, initialContent }: CreateCampaignProps) => {
   const { user } = useAuth();
   const { data: segments = [] } = useSegments();
   const createCampaign = useCreateCampaign();
@@ -50,6 +51,9 @@ export const CreateCampaign = ({ onCreated }: CreateCampaignProps) => {
   const [scheduledAt, setScheduledAt] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
 
+  useEffect(() => {
+    if (initialContent) setContent(initialContent);
+  }, [initialContent]);
   const selectedSegment = segments.find(s => s.id === segmentId);
 
   const insertVariable = (variable: string) => {
