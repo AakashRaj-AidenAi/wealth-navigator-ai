@@ -11,6 +11,7 @@ import { WorkflowLogs } from '@/components/campaigns/workflows/WorkflowLogs';
 import { CampaignDashboard } from '@/components/campaigns/ai/CampaignDashboard';
 import { AIContentGenerator } from '@/components/campaigns/ai/AIContentGenerator';
 import { CampaignAnalytics } from '@/components/campaigns/analytics/CampaignAnalytics';
+import { CampaignTemplates } from '@/components/campaigns/templates/CampaignTemplates';
 import { useState } from 'react';
 
 const PlaceholderCard = ({ title, description }: { title: string; description: string }) => (
@@ -92,7 +93,7 @@ const Campaigns = () => {
             <WorkflowLogs />
           </TabsContent>
           <TabsContent value="templates">
-            <PlaceholderCard title="Templates" description="Create and manage reusable message templates across channels." />
+            <CampaignTemplates />
           </TabsContent>
           <TabsContent value="analytics">
             <CampaignAnalytics />
