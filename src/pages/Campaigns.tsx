@@ -1,10 +1,13 @@
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, Users, PlusCircle, GitBranch, FileText, TrendingUp, History } from 'lucide-react';
+import { BarChart3, Users, PlusCircle, GitBranch, FileText, TrendingUp, History, ScrollText } from 'lucide-react';
 import { SegmentsList } from '@/components/campaigns/segments/SegmentsList';
 import { CreateCampaign } from '@/components/campaigns/create/CreateCampaign';
 import { CampaignHistory } from '@/components/campaigns/history/CampaignHistory';
+import { WorkflowBuilder } from '@/components/campaigns/workflows/WorkflowBuilder';
+import { WorkflowList } from '@/components/campaigns/workflows/WorkflowList';
+import { WorkflowLogs } from '@/components/campaigns/workflows/WorkflowLogs';
 import { useState } from 'react';
 
 const PlaceholderCard = ({ title, description }: { title: string; description: string }) => (
@@ -27,6 +30,8 @@ const tabItems = [
   { value: 'create', label: 'Create Campaign', icon: PlusCircle },
   { value: 'history', label: 'Campaign History', icon: History },
   { value: 'workflows', label: 'Workflows', icon: GitBranch },
+  { value: 'workflow-builder', label: 'New Workflow', icon: PlusCircle },
+  { value: 'workflow-logs', label: 'Workflow Logs', icon: ScrollText },
   { value: 'templates', label: 'Templates', icon: FileText },
   { value: 'analytics', label: 'Analytics', icon: TrendingUp },
 ];
@@ -65,7 +70,13 @@ const Campaigns = () => {
             <CampaignHistory />
           </TabsContent>
           <TabsContent value="workflows">
-            <PlaceholderCard title="Workflows" description="Build automated engagement workflows and drip sequences." />
+            <WorkflowList />
+          </TabsContent>
+          <TabsContent value="workflow-builder">
+            <WorkflowBuilder onCreated={() => setActiveTab('workflows')} />
+          </TabsContent>
+          <TabsContent value="workflow-logs">
+            <WorkflowLogs />
           </TabsContent>
           <TabsContent value="templates">
             <PlaceholderCard title="Templates" description="Create and manage reusable message templates across channels." />
