@@ -14,6 +14,7 @@ import { CorporateActionsWidget } from '@/components/dashboard/CorporateActionsW
 import { ClientsAtRiskWidget } from '@/components/dashboard/ClientsAtRiskWidget';
 import { SilentClientsWidget } from '@/components/dashboard/SilentClientsWidget';
 import { NegativeSentimentWidget } from '@/components/dashboard/NegativeSentimentWidget';
+import { AIInsightsPanel } from '@/components/dashboard/AIInsightsPanel';
 import { AIInsightsCenter } from '@/components/ai-growth-engine';
 import { AICopilot } from '@/components/ai/AICopilot';
 import { supabase } from '@/integrations/supabase/client';
@@ -236,8 +237,8 @@ const Dashboard = () => {
           />
         </div>
 
-        {/* AI Growth Engine - Insights Center */}
-        <AIInsightsCenter />
+        {/* AI Insights Panel - Unified */}
+        <AIInsightsPanel />
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -252,9 +253,6 @@ const Dashboard = () => {
 
           {/* Right Column - Widgets */}
           <div className="space-y-6">
-            <SilentClientsWidget />
-            <ClientsAtRiskWidget />
-            <NegativeSentimentWidget />
             <AlertsPanel />
             <CorporateActionsWidget />
           </div>
