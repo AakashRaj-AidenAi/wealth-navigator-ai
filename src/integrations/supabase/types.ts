@@ -1356,9 +1356,12 @@ export type Database = {
           client_id: string
           created_at: string
           due_date: string | null
+          fee_type: string | null
           gst: number | null
           id: string
           invoice_number: string | null
+          notes: string | null
+          recurring_frequency: string | null
           status: string
           total_amount: number
           updated_at: string
@@ -1369,9 +1372,12 @@ export type Database = {
           client_id: string
           created_at?: string
           due_date?: string | null
+          fee_type?: string | null
           gst?: number | null
           id?: string
           invoice_number?: string | null
+          notes?: string | null
+          recurring_frequency?: string | null
           status?: string
           total_amount?: number
           updated_at?: string
@@ -1382,9 +1388,12 @@ export type Database = {
           client_id?: string
           created_at?: string
           due_date?: string | null
+          fee_type?: string | null
           gst?: number | null
           id?: string
           invoice_number?: string | null
+          notes?: string | null
+          recurring_frequency?: string | null
           status?: string
           total_amount?: number
           updated_at?: string
