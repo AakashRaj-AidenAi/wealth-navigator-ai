@@ -22,6 +22,12 @@ import {
 } from 'lucide-react';
 import { format, differenceInDays, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
+import {
+  notifyFundingInitiated,
+  notifyFundingCompleted,
+  notifyFundingFailed,
+  checkFundingHealthAlerts,
+} from '@/hooks/useFundingNotifications';
 
 // ─── Workflow Definitions ───
 const WORKFLOW_STAGES: Record<string, { stages: string[]; labels: Record<string, string>; settlement: string }> = {
@@ -242,14 +248,16 @@ const Funding = () => {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Check for settlement alerts on requests
+  // Check for settlement alerts, stale requests, and mismatch on requests
   useEffect(() => {
     if (!user || requests.length === 0) return;
+    // Run health checks (stale > 3 days, settlement mismatch)
+    checkFundingHealthAlerts(requests as any, user.id, 3);
+    // Also check approaching settlements
     requests.forEach(async (r) => {
       if (r.settlement_date && r.workflow_stage !== 'completed' && r.workflow_stage !== 'failed') {
         const daysLeft = differenceInDays(new Date(r.settlement_date), new Date());
         if (daysLeft <= 1 && daysLeft >= 0) {
-          // Check if alert already exists
           const existing = alerts.find(a => a.funding_request_id === r.id && a.alert_type === 'settlement_approaching');
           if (!existing) {
             await supabase.from('funding_alerts').insert({
@@ -310,6 +318,12 @@ const Funding = () => {
         funding_request_id: data.id, from_status: null, to_status: 'initiated',
         changed_by: user.id, note: `${requestForm.funding_type} funding request created for ${formatCurrency(parseFloat(requestForm.amount))}`,
       });
+      // Notify: funding initiated
+      const clientName = clients.find(c => c.id === requestForm.client_id)?.client_name || 'Client';
+      await notifyFundingInitiated({
+        requestId: data.id, clientId: requestForm.client_id, clientName,
+        userId: user.id, fundingType: requestForm.funding_type, amount: parseFloat(requestForm.amount),
+      });
     }
     toast({ title: 'Funding request initiated' });
     setRequestForm({ client_id: '', funding_account_id: '', funding_type: 'ACH', amount: '', trade_reference: '', settlement_date: '', notes: '' });
@@ -332,11 +346,21 @@ const Funding = () => {
       funding_request_id: request.id, from_status: prevStage, to_status: nextStage,
       changed_by: user.id, note: `Stage advanced: ${wf.labels[prevStage] || prevStage} → ${wf.labels[nextStage] || nextStage}`,
     });
-    // Auto-update cash balance on completion
+    // Auto-update cash balance on completion + notify
+    const clientName = (request as any).clients?.client_name || 'Client';
     if (nextStage === 'completed') {
       await updateCashBalanceOnCompletion(request);
-      // Resolve any alerts
       await supabase.from('funding_alerts').update({ is_resolved: true, resolved_at: new Date().toISOString() }).eq('funding_request_id', request.id);
+      await notifyFundingCompleted({
+        requestId: request.id, clientId: request.client_id, clientName,
+        userId: user.id, fundingType: request.funding_type, amount: Number(request.amount),
+      });
+    }
+    if (nextStage === 'failed') {
+      await notifyFundingFailed({
+        requestId: request.id, clientId: request.client_id, clientName,
+        userId: user.id, fundingType: request.funding_type, amount: Number(request.amount),
+      });
     }
     toast({ title: `Advanced to ${wf.labels[nextStage] || nextStage}` });
     fetchAll();
