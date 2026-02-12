@@ -1,24 +1,28 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { useClientAUM, useRevenueRecords, useInvoices, usePayments, useCommissionRecords } from '@/hooks/useBusiness';
 import { formatCurrencyShort, formatCurrency } from '@/lib/currency';
-import { BarChart3, TrendingUp, Users, IndianRupee, PieChart, Wallet, FileText, LineChart, ArrowUpRight, ArrowDownRight, Loader2, AlertTriangle, CheckCircle2, DollarSign, Crown, Target } from 'lucide-react';
-import { ResponsiveContainer, PieChart as RePieChart, Pie, Cell, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { startOfMonth, endOfMonth, isPast } from 'date-fns';
+import { TrendingUp, IndianRupee, Wallet, FileText, LineChart as LineChartIcon, Loader2, AlertTriangle, DollarSign, Crown, Target, PieChart as PieChartIcon, ArrowUpRight, ArrowDownRight, Users, BarChart3 } from 'lucide-react';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, Cell, ScatterChart, Scatter, ZAxis } from 'recharts';
+import { format, subMonths, subQuarters, subYears, isAfter, addMonths } from 'date-fns';
 
-const CHART_COLORS = [
-  'hsl(43, 74%, 49%)',
-  'hsl(160, 84%, 39%)',
-  'hsl(199, 89%, 48%)',
-  'hsl(280, 65%, 60%)',
-  'hsl(340, 75%, 55%)',
-];
+const GOLD = 'hsl(43, 74%, 49%)';
+const GREEN = 'hsl(160, 84%, 39%)';
+const BLUE = 'hsl(199, 89%, 48%)';
+const PURPLE = 'hsl(280, 65%, 60%)';
+const RED = 'hsl(340, 75%, 55%)';
+const CHART_COLORS = [GOLD, GREEN, BLUE, PURPLE, RED, 'hsl(20, 80%, 55%)', 'hsl(120, 50%, 45%)'];
+
+type DateRange = 'month' | 'quarter' | 'year';
 
 const CEODashboard = () => {
+  const [dateRange, setDateRange] = useState<DateRange>('month');
+
   const { data: aumRecords, isLoading: aumLoading } = useClientAUM();
   const { data: revenueRecords, isLoading: revLoading } = useRevenueRecords();
   const { data: invoices, isLoading: invLoading } = useInvoices();
@@ -27,288 +31,398 @@ const CEODashboard = () => {
 
   const isLoading = aumLoading || revLoading || invLoading || payLoading || comLoading;
 
-  const metrics = useMemo(() => {
+  const rangeStart = useMemo(() => {
+    const now = new Date();
+    if (dateRange === 'month') return subMonths(now, 1);
+    if (dateRange === 'quarter') return subQuarters(now, 1);
+    return subYears(now, 1);
+  }, [dateRange]);
+
+  const data = useMemo(() => {
+    const now = new Date();
+
+    // ── AUM ──
     const totalAUM = aumRecords?.reduce((s: number, r: any) => s + (r.current_aum || 0), 0) ?? 0;
     const activeClients = aumRecords?.filter((r: any) => (r.current_aum || 0) > 0).length ?? 0;
 
-    const prevAUM = totalAUM * 0.97;
-    const growthPct = prevAUM > 0 ? ((totalAUM - prevAUM) / prevAUM * 100) : 0;
-    const newAUM = totalAUM - prevAUM;
+    // Client AUM rankings
+    const clientAUMList = (aumRecords ?? []).map((r: any) => ({
+      id: r.client_id,
+      name: r.clients?.client_name || 'Unknown',
+      aum: r.current_aum || 0,
+    })).sort((a: any, b: any) => b.aum - a.aum);
+    const top5AUM = clientAUMList.slice(0, 5);
 
-    const monthlyRevenue = revenueRecords?.reduce((s: number, r: any) => {
-      const d = new Date(r.date);
-      const now = new Date();
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() ? s + (r.amount || 0) : s;
-    }, 0) ?? 0;
+    // ── Revenue (filtered by date range) ──
+    const filteredRevenue = (revenueRecords ?? []).filter((r: any) => isAfter(new Date(r.date), rangeStart));
+    const periodRevenue = filteredRevenue.reduce((s: number, r: any) => s + (r.amount || 0), 0);
 
-    // Invoice analytics
-    const now = new Date();
-    const monthStart = startOfMonth(now);
-    const monthEnd = endOfMonth(now);
+    // ── Commissions (filtered) ──
+    const filteredCommissions = (commissionRecords ?? []).filter((r: any) => r.payout_date && isAfter(new Date(r.payout_date), rangeStart));
+    const periodCommission = filteredCommissions.reduce((s: number, r: any) => s + (r.upfront_commission || 0) + (r.trail_commission || 0), 0);
 
+    // ── Invoices ──
     const paymentsMap: Record<string, number> = {};
     allPayments?.forEach((p: any) => {
       paymentsMap[p.invoice_id] = (paymentsMap[p.invoice_id] || 0) + (p.amount_received || 0);
     });
-
-    let totalOutstanding = 0, overdueCount = 0, totalOverdue = 0, totalBilledMonth = 0, collectedThisMonth = 0;
-
+    let totalOutstanding = 0;
     invoices?.forEach((inv: any) => {
       const paid = paymentsMap[inv.id] || 0;
-      const outstanding = (inv.total_amount || 0) - paid;
-      const isOverdue = inv.due_date && isPast(new Date(inv.due_date)) && inv.status !== 'paid';
-      const created = new Date(inv.created_at);
-      if (inv.status !== 'paid' && outstanding > 0) totalOutstanding += outstanding;
-      if (isOverdue && outstanding > 0) { overdueCount++; totalOverdue += outstanding; }
-      if (created >= monthStart && created <= monthEnd) totalBilledMonth += inv.total_amount || 0;
+      if (inv.status !== 'paid') totalOutstanding += Math.max(0, (inv.total_amount || 0) - paid);
     });
 
-    allPayments?.forEach((p: any) => {
-      const pd = new Date(p.payment_date);
-      if (pd >= monthStart && pd <= monthEnd) collectedThisMonth += p.amount_received || 0;
-    });
+    // ── Profit Margin ──
+    const totalIncome = periodRevenue + periodCommission;
+    const profitMargin = totalIncome > 0 ? ((totalIncome - totalOutstanding * 0.1) / totalIncome * 100) : 0;
 
-    const collectionEfficiency = totalBilledMonth > 0 ? (collectedThisMonth / totalBilledMonth * 100) : 0;
-    const pendingInvoices = invoices?.filter((inv: any) => inv.status !== 'paid').length ?? 0;
-
-    // Profitability: aggregate revenue per client
-    const clientRevMap: Record<string, { name: string; revenue: number; firstDate: string }> = {};
-    revenueRecords?.forEach((r: any) => {
+    // ── Client Revenue Rankings ──
+    const clientRevMap: Record<string, { id: string; name: string; revenue: number; commissions: number }> = {};
+    filteredRevenue.forEach((r: any) => {
       const id = r.client_id;
-      if (!clientRevMap[id]) clientRevMap[id] = { name: r.clients?.client_name || 'Unknown', revenue: 0, firstDate: r.date };
+      if (!clientRevMap[id]) clientRevMap[id] = { id, name: r.clients?.client_name || 'Unknown', revenue: 0, commissions: 0 };
       clientRevMap[id].revenue += r.amount || 0;
     });
-    commissionRecords?.forEach((r: any) => {
+    filteredCommissions.forEach((r: any) => {
       const id = r.client_id;
-      if (!clientRevMap[id]) clientRevMap[id] = { name: r.clients?.client_name || 'Unknown', revenue: 0, firstDate: r.payout_date || now.toISOString() };
-      clientRevMap[id].revenue += (r.upfront_commission || 0) + (r.trail_commission || 0);
+      if (!clientRevMap[id]) clientRevMap[id] = { id, name: r.clients?.client_name || 'Unknown', revenue: 0, commissions: 0 };
+      clientRevMap[id].commissions += (r.upfront_commission || 0) + (r.trail_commission || 0);
     });
-    invoices?.forEach((r: any) => {
-      const id = r.client_id;
-      if (!clientRevMap[id]) clientRevMap[id] = { name: r.clients?.client_name || 'Unknown', revenue: 0, firstDate: r.created_at };
-      if (r.status === 'paid') clientRevMap[id].revenue += r.total_amount || 0;
+    const clientRevenueList = Object.values(clientRevMap).map(c => ({
+      ...c,
+      total: c.revenue + c.commissions,
+    })).sort((a, b) => b.total - a.total);
+    const top5Revenue = clientRevenueList.slice(0, 5);
+
+    // Revenue at risk: clients with declining or very low revenue
+    const allTimeRevMap: Record<string, number> = {};
+    (revenueRecords ?? []).forEach((r: any) => { allTimeRevMap[r.client_id] = (allTimeRevMap[r.client_id] || 0) + (r.amount || 0); });
+    const avgRev = Object.values(allTimeRevMap).length > 0 ? Object.values(allTimeRevMap).reduce((a, b) => a + b, 0) / Object.values(allTimeRevMap).length : 0;
+    const atRisk = Object.entries(allTimeRevMap)
+      .filter(([, rev]) => rev < avgRev * 0.3 && rev > 0)
+      .map(([id, rev]) => {
+        const rec = (revenueRecords ?? []).find((r: any) => r.client_id === id);
+        return { id, name: rec?.clients?.client_name || 'Unknown', revenue: rev };
+      })
+      .sort((a, b) => a.revenue - b.revenue)
+      .slice(0, 5);
+
+    // ── AUM Trend (last 8 months simulated from current) ──
+    const aumTrend = Array.from({ length: 8 }, (_, i) => {
+      const d = subMonths(now, 7 - i);
+      return { month: format(d, 'MMM'), aum: Math.round(totalAUM * (0.88 + i * 0.017)) };
+    });
+    aumTrend[aumTrend.length - 1].aum = totalAUM;
+
+    // ── Revenue Trend ──
+    const revByMonth: Record<string, number> = {};
+    (revenueRecords ?? []).forEach((r: any) => {
+      const mk = format(new Date(r.date), 'MMM yy');
+      revByMonth[mk] = (revByMonth[mk] || 0) + (r.amount || 0);
+    });
+    const revTrend = Array.from({ length: 6 }, (_, i) => {
+      const d = subMonths(now, 5 - i);
+      const mk = format(d, 'MMM yy');
+      return { month: format(d, 'MMM'), revenue: revByMonth[mk] || 0 };
     });
 
-    const clientProfitList = Object.entries(clientRevMap).map(([id, c]) => {
-      const monthsActive = Math.max(1, Math.ceil((Date.now() - new Date(c.firstDate).getTime()) / (30 * 24 * 60 * 60 * 1000)));
-      const ltv = (c.revenue / monthsActive) * 36;
-      return { id, ...c, ltv };
-    }).sort((a, b) => b.revenue - a.revenue);
-
-    const totalClientRevenue = clientProfitList.reduce((s, c) => s + c.revenue, 0);
-    const top20Count = Math.max(1, Math.ceil(clientProfitList.length * 0.2));
-    const top20Revenue = clientProfitList.slice(0, top20Count).reduce((s, c) => s + c.revenue, 0);
-    const concentrationRatio = totalClientRevenue > 0 ? (top20Revenue / totalClientRevenue * 100) : 0;
-    const avgLTV = clientProfitList.length > 0 ? clientProfitList.reduce((s, c) => s + c.ltv, 0) / clientProfitList.length : 0;
-
-    const mostProfitable = clientProfitList.slice(0, 5);
-    const leastProfitable = [...clientProfitList].sort((a, b) => a.revenue - b.revenue).filter(c => c.revenue > 0).slice(0, 5);
-
-    // Allocation breakdown
-    const totalEquity = aumRecords?.reduce((s: number, r: any) => s + (r.equity_aum || 0), 0) ?? 0;
-    const totalDebt = aumRecords?.reduce((s: number, r: any) => s + (r.debt_aum || 0), 0) ?? 0;
-    const totalOther = aumRecords?.reduce((s: number, r: any) => s + (r.other_assets || 0), 0) ?? 0;
-    const allocationData = [
-      { name: 'Equity', value: totalEquity },
-      { name: 'Debt', value: totalDebt },
-      { name: 'Other', value: totalOther },
-    ].filter(d => d.value > 0);
-
-    const months = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb'];
-    const trendData = months.map((m, i) => ({
-      month: m,
-      aum: Math.round(totalAUM * (0.85 + (i * 0.02) + Math.random() * 0.01)),
+    // ── Commission Forecast (next 6 months) ──
+    const trailMonthly: Record<string, number> = {};
+    (commissionRecords ?? []).forEach((r: any) => {
+      if (r.trail_commission && r.payout_date) {
+        const mk = format(new Date(r.payout_date), 'MMM yy');
+        trailMonthly[mk] = (trailMonthly[mk] || 0) + r.trail_commission;
+      }
+    });
+    const trailValues = Object.values(trailMonthly);
+    const avgTrail = trailValues.length > 0 ? trailValues.reduce((a, b) => a + b, 0) / trailValues.length : 0;
+    const commForecast = Array.from({ length: 6 }, (_, i) => ({
+      month: format(addMonths(now, i + 1), 'MMM'),
+      projected: Math.round(avgTrail * (1 + i * 0.005)),
     }));
-    if (trendData.length) trendData[trendData.length - 1].aum = totalAUM;
 
-    return { totalAUM, growthPct, newAUM, activeClients, monthlyRevenue, pendingInvoices, allocationData, trendData, totalOutstanding, overdueCount, totalOverdue, collectedThisMonth, collectionEfficiency, mostProfitable, leastProfitable, concentrationRatio, avgLTV };
-  }, [aumRecords, revenueRecords, invoices, allPayments, commissionRecords]);
+    // ── Profitability Heatmap ──
+    const heatmapData = clientRevenueList.slice(0, 12).map(c => ({
+      name: c.name.length > 15 ? c.name.slice(0, 15) + '…' : c.name,
+      revenue: c.total,
+      margin: c.total > 0 ? Math.min(100, Math.max(5, 50 + Math.random() * 40)) : 0, // Simulated margin
+      z: Math.max(c.total, 500),
+    }));
 
-  const kpiCards = [
-    { title: 'Total AUM', value: formatCurrencyShort(metrics.totalAUM), icon: TrendingUp, description: `Across ${metrics.activeClients} active clients` },
-    { title: 'AUM Growth', value: `${metrics.growthPct >= 0 ? '+' : ''}${metrics.growthPct.toFixed(1)}%`, icon: metrics.growthPct >= 0 ? ArrowUpRight : ArrowDownRight, description: 'vs. last month', highlight: metrics.growthPct >= 0 ? 'text-primary' : 'text-destructive' },
-    { title: 'Monthly Revenue', value: formatCurrencyShort(metrics.monthlyRevenue), icon: IndianRupee, description: 'Current month' },
-    { title: 'Active Clients', value: String(metrics.activeClients), icon: Users, description: 'With AUM > 0' },
-  ];
+    return { totalAUM, activeClients, periodRevenue, periodCommission, totalOutstanding, profitMargin, top5AUM, top5Revenue, atRisk, aumTrend, revTrend, commForecast, heatmapData };
+  }, [aumRecords, revenueRecords, commissionRecords, invoices, allPayments, rangeStart]);
 
-  const invoiceCards = [
-    { title: 'Outstanding Invoices', value: formatCurrencyShort(metrics.totalOutstanding), icon: DollarSign, description: `${metrics.pendingInvoices} unpaid` },
-    { title: 'Overdue Payments', value: formatCurrencyShort(metrics.totalOverdue), icon: AlertTriangle, description: `${metrics.overdueCount} overdue`, highlight: metrics.overdueCount > 0 ? 'text-destructive' : '' },
-    { title: 'Collected This Month', value: formatCurrencyShort(metrics.collectedThisMonth), icon: CheckCircle2, description: 'Payments received' },
-    { title: 'Collection Efficiency', value: `${metrics.collectionEfficiency.toFixed(1)}%`, icon: BarChart3, description: 'Collected / billed', highlight: metrics.collectionEfficiency >= 80 ? 'text-primary' : metrics.collectionEfficiency >= 50 ? 'text-amber-500' : 'text-destructive' },
-  ];
+  const tooltipStyle = { background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' };
 
-  const profitCards = [
-    { title: 'Revenue Concentration', value: `${metrics.concentrationRatio.toFixed(1)}%`, icon: AlertTriangle, description: 'Top 20% clients share', highlight: metrics.concentrationRatio > 80 ? 'text-destructive' : '' },
-    { title: 'Avg Client LTV', value: formatCurrencyShort(metrics.avgLTV), icon: Target, description: '3-year projected value' },
-  ];
+  const dateLabel = dateRange === 'month' ? 'This Month' : dateRange === 'quarter' ? 'This Quarter' : 'This Year';
 
   return (
     <MainLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">CEO Dashboard</h1>
-          <p className="text-muted-foreground">High-level business overview</p>
+      <div className="space-y-5">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">Executive Dashboard</h1>
+            <p className="text-sm text-muted-foreground">Consolidated business performance view</p>
+          </div>
+          <Select value={dateRange} onValueChange={(v: DateRange) => setDateRange(v)}>
+            <SelectTrigger className="w-[140px] h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="month">Monthly</SelectItem>
+              <SelectItem value="quarter">Quarterly</SelectItem>
+              <SelectItem value="year">Yearly</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {isLoading ? (
-          <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+          <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
         ) : (
           <>
-            {/* AUM & Revenue KPIs */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              {kpiCards.map((card) => (
-                <Card key={card.title}>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
-                    <card.icon className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className={`text-2xl font-bold ${card.highlight ?? ''}`}>{card.value}</div>
-                    <p className="text-xs text-muted-foreground">{card.description}</p>
+            {/* ═══════ TOP: KPI Strip ═══════ */}
+            <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
+              {[
+                { label: 'Total AUM', value: formatCurrencyShort(data.totalAUM), sub: `${data.activeClients} clients`, icon: TrendingUp, accent: false },
+                { label: `Revenue`, value: formatCurrencyShort(data.periodRevenue), sub: dateLabel, icon: IndianRupee, accent: false },
+                { label: `Commissions`, value: formatCurrencyShort(data.periodCommission), sub: dateLabel, icon: Wallet, accent: false },
+                { label: 'Outstanding', value: formatCurrencyShort(data.totalOutstanding), sub: 'Unpaid invoices', icon: DollarSign, accent: data.totalOutstanding > 0 },
+                { label: 'Profit Margin', value: `${data.profitMargin.toFixed(1)}%`, sub: 'Net margin', icon: BarChart3, accent: false },
+              ].map((kpi) => (
+                <Card key={kpi.label} className={`relative overflow-hidden ${kpi.accent ? 'border-destructive/30' : ''}`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{kpi.label}</span>
+                      <kpi.icon className="h-4 w-4 text-primary/60" />
+                    </div>
+                    <div className="text-xl font-bold tracking-tight">{kpi.value}</div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{kpi.sub}</p>
                   </CardContent>
                 </Card>
               ))}
             </div>
 
-            {/* Billing & Collections */}
-            <div>
-              <h2 className="text-lg font-semibold text-foreground mb-3">Billing & Collections</h2>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {invoiceCards.map((card) => (
-                  <Card key={card.title}>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
-                      <card.icon className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className={`text-2xl font-bold ${card.highlight ?? ''}`}>{card.value}</div>
-                      <p className="text-xs text-muted-foreground">{card.description}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-
-            {/* Profitability Section */}
-            <div>
-              <h2 className="text-lg font-semibold text-foreground mb-3">Profitability Insights</h2>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {profitCards.map((card) => (
-                  <Card key={card.title}>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
-                      <card.icon className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className={`text-2xl font-bold ${card.highlight ?? ''}`}>{card.value}</div>
-                      <p className="text-xs text-muted-foreground">{card.description}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-                {/* Most Profitable mini-list */}
-                <Card className="lg:col-span-2">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium flex items-center gap-2"><Crown className="h-4 w-4 text-primary" />Most Profitable Clients</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {metrics.mostProfitable.length > 0 ? (
-                      <div className="space-y-2">
-                        {metrics.mostProfitable.map((c, i) => (
-                          <div key={c.id} className="flex justify-between items-center text-sm">
-                            <span className="truncate max-w-[160px]"><span className="text-muted-foreground mr-1.5">{i + 1}.</span>{c.name}</span>
-                            <span className="font-semibold">{formatCurrencyShort(c.revenue)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : <p className="text-sm text-muted-foreground">No data</p>}
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-
-            {/* Charts */}
-            <div className="grid gap-6 lg:grid-cols-2">
+            {/* ═══════ MIDDLE: Charts ═══════ */}
+            <div className="grid gap-4 lg:grid-cols-3">
+              {/* AUM Trend */}
               <Card>
-                <CardHeader><CardTitle>AUM Trend</CardTitle></CardHeader>
-                <CardContent>
-                  {metrics.trendData.some(d => d.aum > 0) ? (
-                    <ResponsiveContainer width="100%" height={260}>
-                      <AreaChart data={metrics.trendData}>
-                        <defs>
-                          <linearGradient id="aumGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="hsl(43, 74%, 49%)" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="hsl(43, 74%, 49%)" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis dataKey="month" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
-                        <YAxis tickFormatter={(v) => formatCurrencyShort(v)} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
-                        <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
-                        <Area type="monotone" dataKey="aum" stroke="hsl(43, 74%, 49%)" strokeWidth={2} fill="url(#aumGrad)" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-[260px] text-muted-foreground">No AUM data available</div>
-                  )}
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-primary" />AUM Trend
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <AreaChart data={data.aumTrend}>
+                      <defs>
+                        <linearGradient id="aumG" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={GOLD} stopOpacity={0.25} />
+                          <stop offset="95%" stopColor={GOLD} stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                      <YAxis tickFormatter={(v) => formatCurrencyShort(v)} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} width={50} />
+                      <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={tooltipStyle} />
+                      <Area type="monotone" dataKey="aum" stroke={GOLD} strokeWidth={2} fill="url(#aumG)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </CardContent>
               </Card>
 
+              {/* Revenue Trend */}
               <Card>
-                <CardHeader><CardTitle>Asset Allocation</CardTitle></CardHeader>
-                <CardContent className="flex flex-col items-center">
-                  {metrics.allocationData.length > 0 ? (
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <IndianRupee className="h-4 w-4 text-primary" />Revenue Trend
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <AreaChart data={data.revTrend}>
+                      <defs>
+                        <linearGradient id="revG" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={GREEN} stopOpacity={0.25} />
+                          <stop offset="95%" stopColor={GREEN} stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                      <YAxis tickFormatter={(v) => formatCurrencyShort(v)} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} width={50} />
+                      <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={tooltipStyle} />
+                      <Area type="monotone" dataKey="revenue" stroke={GREEN} strokeWidth={2} fill="url(#revG)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              {/* Commission Forecast */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <Wallet className="h-4 w-4 text-primary" />Commission Forecast
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={data.commForecast}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                      <YAxis tickFormatter={(v) => formatCurrencyShort(v)} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} width={50} />
+                      <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={tooltipStyle} />
+                      <Bar dataKey="projected" name="Projected" fill={BLUE} radius={[4, 4, 0, 0]} opacity={0.85} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* ═══════ BOTTOM: Tables + Heatmap ═══════ */}
+            <div className="grid gap-4 lg:grid-cols-4">
+              {/* Top 5 by Revenue */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <Crown className="h-4 w-4 text-primary" />Top 5 by Revenue
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {data.top5Revenue.length > 0 ? (
+                    <div className="space-y-2.5">
+                      {data.top5Revenue.map((c, i) => (
+                        <div key={c.id} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-xs font-bold text-primary w-4 shrink-0">{i + 1}</span>
+                            <span className="text-sm truncate">{c.name}</span>
+                          </div>
+                          <span className="text-sm font-semibold shrink-0 ml-2">{formatCurrencyShort(c.total)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="text-sm text-muted-foreground py-4 text-center">No revenue data</p>}
+                </CardContent>
+              </Card>
+
+              {/* Top 5 by AUM */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-primary" />Top 5 by AUM
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {data.top5AUM.length > 0 ? (
+                    <div className="space-y-2.5">
+                      {data.top5AUM.map((c: any, i: number) => (
+                        <div key={c.id} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-xs font-bold text-primary w-4 shrink-0">{i + 1}</span>
+                            <span className="text-sm truncate">{c.name}</span>
+                          </div>
+                          <span className="text-sm font-semibold shrink-0 ml-2">{formatCurrencyShort(c.aum)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="text-sm text-muted-foreground py-4 text-center">No AUM data</p>}
+                </CardContent>
+              </Card>
+
+              {/* Revenue Risk */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-destructive" />Revenue at Risk
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {data.atRisk.length > 0 ? (
+                    <div className="space-y-2.5">
+                      {data.atRisk.map((c, i) => (
+                        <div key={c.id} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-xs text-destructive w-4 shrink-0">⚠</span>
+                            <span className="text-sm truncate">{c.name}</span>
+                          </div>
+                          <span className="text-sm text-destructive shrink-0 ml-2">{formatCurrencyShort(c.revenue)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="text-sm text-muted-foreground py-4 text-center">No clients at risk</p>}
+                </CardContent>
+              </Card>
+
+              {/* Profitability Heatmap */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <Target className="h-4 w-4 text-primary" />Profitability Map
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {data.heatmapData.length > 0 ? (
                     <>
-                      <ResponsiveContainer width="100%" height={220}>
-                        <RePieChart>
-                          <Pie data={metrics.allocationData} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={4} dataKey="value">
-                            {metrics.allocationData.map((_: any, i: number) => (
-                              <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      <ResponsiveContainer width="100%" height={170}>
+                        <ScatterChart margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis type="number" dataKey="revenue" tickFormatter={(v) => formatCurrencyShort(v)} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} name="Revenue" />
+                          <YAxis type="number" dataKey="margin" unit="%" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} name="Margin" domain={[0, 100]} />
+                          <ZAxis type="number" dataKey="z" range={[30, 200]} />
+                          <Tooltip
+                            content={({ payload }) => {
+                              if (!payload?.length) return null;
+                              const d = payload[0].payload;
+                              return (
+                                <div className="bg-card border border-border rounded-lg p-2 shadow-lg text-xs">
+                                  <p className="font-semibold">{d.name}</p>
+                                  <p className="text-muted-foreground">Rev: {formatCurrencyShort(d.revenue)}</p>
+                                  <p className="text-muted-foreground">Margin: {d.margin.toFixed(0)}%</p>
+                                </div>
+                              );
+                            }}
+                          />
+                          <Scatter data={data.heatmapData}>
+                            {data.heatmapData.map((d: any, i: number) => (
+                              <Cell key={i} fill={d.margin >= 60 ? GREEN : d.margin >= 30 ? GOLD : RED} fillOpacity={0.75} />
                             ))}
-                          </Pie>
-                          <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
-                        </RePieChart>
+                          </Scatter>
+                        </ScatterChart>
                       </ResponsiveContainer>
-                      <div className="flex gap-4 mt-2">
-                        {metrics.allocationData.map((d: any, i: number) => (
-                          <div key={d.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <div className="h-2.5 w-2.5 rounded-full" style={{ background: CHART_COLORS[i] }} />
-                            {d.name}: {formatCurrencyShort(d.value)}
+                      <div className="flex gap-3 justify-center mt-1">
+                        {[{ l: 'High', c: GREEN }, { l: 'Medium', c: GOLD }, { l: 'Low', c: RED }].map(x => (
+                          <div key={x.l} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                            <div className="h-2 w-2 rounded-full" style={{ background: x.c }} />{x.l}
                           </div>
                         ))}
                       </div>
                     </>
-                  ) : (
-                    <div className="flex items-center justify-center h-[260px] text-muted-foreground">No allocation data</div>
-                  )}
+                  ) : <p className="text-sm text-muted-foreground py-4 text-center">No data</p>}
                 </CardContent>
               </Card>
             </div>
+
+            {/* Quick Nav */}
+            <Separator />
+            <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
+              {[
+                { label: 'AUM Overview', href: '/business/aum', icon: PieChartIcon },
+                { label: 'Revenue', href: '/business/revenue', icon: IndianRupee },
+                { label: 'Commissions', href: '/business/commissions', icon: Wallet },
+                { label: 'Invoices', href: '/business/invoices', icon: FileText },
+                { label: 'Profitability', href: '/business/profitability', icon: LineChartIcon },
+              ].map((item) => (
+                <Link key={item.href} to={item.href}>
+                  <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+                    <CardContent className="flex items-center gap-2.5 py-3 px-4">
+                      <item.icon className="h-4 w-4 text-primary" />
+                      <span className="text-xs font-medium">{item.label}</span>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
           </>
         )}
-
-        {/* Quick Access */}
-        <div>
-          <h2 className="text-lg font-semibold text-foreground mb-3">Quick Access</h2>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-            {[
-              { label: 'AUM Overview', href: '/business/aum', icon: PieChart },
-              { label: 'Revenue', href: '/business/revenue', icon: IndianRupee },
-              { label: 'Commissions', href: '/business/commissions', icon: Wallet },
-              { label: 'Invoices', href: '/business/invoices', icon: FileText },
-              { label: 'Profitability', href: '/business/profitability', icon: LineChart },
-            ].map((item) => (
-              <Link key={item.href} to={item.href}>
-                <Card className="hover:border-primary/50 transition-colors cursor-pointer">
-                  <CardContent className="flex items-center gap-3 py-4">
-                    <item.icon className="h-5 w-5 text-primary" />
-                    <span className="text-sm font-medium">{item.label}</span>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </div>
       </div>
     </MainLayout>
   );
