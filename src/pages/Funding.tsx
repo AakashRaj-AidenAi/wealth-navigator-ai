@@ -21,8 +21,9 @@ import {
   XCircle, AlertCircle, History, IndianRupee, Trash2, ChevronDown, ChevronRight,
   AlertTriangle, ArrowRight, Zap, FileText, Eye, Bell, Brain, TrendingDown,
   TrendingUp, Shield, Activity, Sparkles, BarChart3, Target, ArrowDownRight,
-  ClipboardList, BookOpen, ThumbsUp, ThumbsDown, Send,
+  ClipboardList, BookOpen, ThumbsUp, ThumbsDown, Send, Ban,
 } from 'lucide-react';
+import { PayoutSettlementTracker, SettlementTimeline } from '@/components/funding/PayoutSettlementTracker';
 import { format, differenceInDays, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import {
@@ -471,12 +472,49 @@ const Funding = () => {
   // ─── Payout Handlers ───
   const handleRequestPayout = async () => {
     if (!user || !payoutForm.client_id || !payoutForm.amount) return;
+    const amount = parseFloat(payoutForm.amount);
+    const clientBalance = balances.find(b => b.client_id === payoutForm.client_id);
+    const availableCash = Number(clientBalance?.available_cash || 0);
+    const pendingCash = Number(clientBalance?.pending_cash || 0);
+    const limit = withdrawalLimits.find(l => l.client_id === payoutForm.client_id);
+    const dailyLimit = Number(limit?.daily_limit || 500000);
+    const monthlyLimit = Number(limit?.monthly_limit || 5000000);
+
+    // Validation 1: Funds still pending settlement
+    if (pendingCash > 0 && availableCash < amount) {
+      toast({ title: 'Settlement Pending', description: `${formatCurrency(pendingCash)} is still pending settlement. Wait for funds to clear before requesting a payout.`, variant: 'destructive' });
+      return;
+    }
+    // Validation 2: Insufficient available cash
+    if (amount > availableCash) {
+      toast({ title: 'Insufficient Funds', description: `Available cash is ${formatCurrency(availableCash)}. Cannot process payout of ${formatCurrency(amount)}.`, variant: 'destructive' });
+      return;
+    }
+    // Validation 3: Daily limit check
+    if (amount > dailyLimit) {
+      toast({ title: 'Daily Limit Exceeded', description: `Payout amount exceeds daily limit of ${formatCurrency(dailyLimit)}.`, variant: 'destructive' });
+      return;
+    }
+    // Validation 4: Monthly limit check (sum of completed payouts this month + current)
+    const thisMonth = new Date();
+    const monthStart = new Date(thisMonth.getFullYear(), thisMonth.getMonth(), 1).toISOString();
+    const monthPayouts = payoutRequests
+      .filter(p => p.client_id === payoutForm.client_id && p.status !== 'Failed' && new Date(p.requested_date) >= new Date(monthStart))
+      .reduce((s, p) => s + Number(p.amount), 0);
+    if (monthPayouts + amount > monthlyLimit) {
+      toast({ title: 'Monthly Limit Exceeded', description: `Total monthly payouts would be ${formatCurrency(monthPayouts + amount)}, exceeding limit of ${formatCurrency(monthlyLimit)}.`, variant: 'destructive' });
+      return;
+    }
+
+    // Auto-link trade reference if a linked trade ID is provided
+    const tradeRef = payoutForm.linked_trade_id || null;
+
     const { error } = await supabase.from('payout_requests').insert({
       client_id: payoutForm.client_id,
       advisor_id: user.id,
       payout_type: payoutForm.payout_type,
-      amount: parseFloat(payoutForm.amount),
-      linked_trade_id: payoutForm.linked_trade_id || null,
+      amount,
+      linked_trade_id: tradeRef,
       settlement_date: payoutForm.settlement_date || null,
       notes: payoutForm.notes || null,
     });
@@ -839,7 +877,7 @@ const Funding = () => {
                 <div><CardTitle>Request Payout</CardTitle><CardDescription>Withdraw funds after selling securities</CardDescription></div>
                 <Dialog open={showPayoutDialog} onOpenChange={setShowPayoutDialog}>
                   <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1.5" /> New Payout Request</Button></DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="max-w-lg">
                     <DialogHeader><DialogTitle>Request Payout</DialogTitle></DialogHeader>
                     <div className="space-y-4">
                       <div><Label>Client</Label><Select value={payoutForm.client_id} onValueChange={v => setPayoutForm(p => ({ ...p, client_id: v }))}><SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger><SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.client_name}</SelectItem>)}</SelectContent></Select></div>
@@ -858,16 +896,49 @@ const Funding = () => {
                       {payoutForm.client_id && (() => {
                         const limit = withdrawalLimits.find(l => l.client_id === payoutForm.client_id);
                         const bal = balances.find(b => b.client_id === payoutForm.client_id);
+                        const availCash = Number(bal?.available_cash || 0);
+                        const pendCash = Number(bal?.pending_cash || 0);
+                        const requestedAmt = parseFloat(payoutForm.amount) || 0;
+                        const hasPendingFunds = pendCash > 0 && availCash < requestedAmt;
+                        const insufficientCash = requestedAmt > availCash;
                         return (
-                          <div className="rounded-lg border p-3 space-y-1 text-sm">
-                            <p className="text-muted-foreground text-xs font-medium uppercase">Limits & Balance</p>
-                            <div className="flex justify-between"><span className="text-muted-foreground">Available Cash:</span><span className="font-medium">{formatCurrency(Number(bal?.available_cash || 0))}</span></div>
-                            <div className="flex justify-between"><span className="text-muted-foreground">Daily Limit:</span><span className="font-medium">{formatCurrency(Number(limit?.daily_limit || 500000))}</span></div>
-                            <div className="flex justify-between"><span className="text-muted-foreground">Monthly Limit:</span><span className="font-medium">{formatCurrency(Number(limit?.monthly_limit || 5000000))}</span></div>
+                          <div className="space-y-3">
+                            <div className="rounded-lg border p-3 space-y-1.5 text-sm">
+                              <p className="text-muted-foreground text-xs font-medium uppercase">Limits & Balance</p>
+                              <div className="flex justify-between"><span className="text-muted-foreground">Available Cash:</span><span className="font-medium text-emerald-600">{formatCurrency(availCash)}</span></div>
+                              {pendCash > 0 && (
+                                <div className="flex justify-between"><span className="text-muted-foreground">Pending Settlement:</span><span className="font-medium text-amber-600">{formatCurrency(pendCash)}</span></div>
+                              )}
+                              <div className="flex justify-between"><span className="text-muted-foreground">Daily Limit:</span><span className="font-medium">{formatCurrency(Number(limit?.daily_limit || 500000))}</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">Monthly Limit:</span><span className="font-medium">{formatCurrency(Number(limit?.monthly_limit || 5000000))}</span></div>
+                            </div>
+                            {hasPendingFunds && (
+                              <div className="flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-400">
+                                <Clock className="h-4 w-4 flex-shrink-0" />
+                                <span>Funds of {formatCurrency(pendCash)} are still pending settlement. Payout will be blocked until settlement clears.</span>
+                              </div>
+                            )}
+                            {insufficientCash && !hasPendingFunds && requestedAmt > 0 && (
+                              <div className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/5 p-3 text-sm text-destructive">
+                                <Ban className="h-4 w-4 flex-shrink-0" />
+                                <span>Insufficient available cash. Need {formatCurrency(requestedAmt - availCash)} more.</span>
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
-                      <div><Label>Linked Trade ID (Optional)</Label><Input value={payoutForm.linked_trade_id} onChange={e => setPayoutForm(p => ({ ...p, linked_trade_id: e.target.value }))} placeholder="Trade reference" /></div>
+                      <div>
+                        <Label>Link to Sell Trade (Optional)</Label>
+                        <Select value={payoutForm.linked_trade_id} onValueChange={v => setPayoutForm(p => ({ ...p, linked_trade_id: v }))}>
+                          <SelectTrigger><SelectValue placeholder="Select a sell trade..." /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">None</SelectItem>
+                            {orders.filter(o => o.order_type === 'sell').map(o => (
+                              <SelectItem key={o.id} value={o.id}>{o.symbol} — {formatCurrency(Number(o.total_amount))}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <div><Label>Settlement Date</Label><Input type="date" value={payoutForm.settlement_date} onChange={e => setPayoutForm(p => ({ ...p, settlement_date: e.target.value }))} /></div>
                       <div><Label>Notes</Label><Textarea value={payoutForm.notes} onChange={e => setPayoutForm(p => ({ ...p, notes: e.target.value }))} rows={2} placeholder="Additional notes..." /></div>
                     </div>
@@ -908,38 +979,62 @@ const Funding = () => {
                 {payoutRequests.filter(p => p.status === 'Requested' || p.status === 'Approved').length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">No payouts pending approval.</p>
                 ) : (
-                  <div className="space-y-3">
-                    {payoutRequests.filter(p => p.status === 'Requested' || p.status === 'Approved').map(p => (
-                      <div key={p.id} className="border rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <p className="font-medium">{(p as any).clients?.client_name || '—'}</p>
-                            <div className="flex items-center gap-2 mt-1">
-                              <Badge variant="outline">{p.payout_type}</Badge>
-                              <span className="font-semibold">{formatCurrency(Number(p.amount))}</span>
-                              {p.linked_trade_id && <Badge variant="secondary" className="text-xs">Trade: {p.linked_trade_id.slice(0, 8)}</Badge>}
+                  <div className="space-y-4">
+                    {payoutRequests.filter(p => p.status === 'Requested' || p.status === 'Approved').map(p => {
+                      const bal = balances.find(b => b.client_id === p.client_id);
+                      const settlementCleared = !bal || Number(bal.pending_cash) === 0;
+                      return (
+                        <div key={p.id} className="border rounded-lg p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium">{(p as any).clients?.client_name || '—'}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge variant="outline">{p.payout_type}</Badge>
+                                <span className="font-semibold">{formatCurrency(Number(p.amount))}</span>
+                                {p.linked_trade_id && <Badge variant="secondary" className="text-xs">Trade: {p.linked_trade_id.slice(0, 8)}</Badge>}
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1">Requested {format(new Date(p.requested_date), 'dd MMM yyyy, HH:mm')}</p>
+                              {p.notes && <p className="text-xs text-muted-foreground mt-1">{p.notes}</p>}
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1">Requested {format(new Date(p.requested_date), 'dd MMM yyyy, HH:mm')}</p>
-                            {p.notes && <p className="text-xs text-muted-foreground mt-1">{p.notes}</p>}
+                            <Badge variant={p.status === 'Requested' ? 'secondary' : 'default'}>{p.status}</Badge>
                           </div>
-                          <Badge variant={p.status === 'Requested' ? 'secondary' : 'default'}>{p.status}</Badge>
+
+                          {/* Payout Lifecycle Tracker */}
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">Payout Lifecycle</p>
+                            <PayoutSettlementTracker status={p.status} settlementCleared={settlementCleared} isFailed={p.status === 'Failed'} />
+                          </div>
+
+                          {/* Settlement Timeline */}
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">Settlement Timeline</p>
+                            <SettlementTimeline
+                              tradeDate={p.linked_trade_id ? p.created_at : null}
+                              settlementDate={p.settlement_date}
+                              cashAvailableDate={settlementCleared && p.settlement_date ? p.settlement_date : null}
+                              payoutRequestedDate={p.requested_date}
+                              completedDate={p.status === 'Completed' ? p.created_at : null}
+                              status={p.status}
+                            />
+                          </div>
+
+                          <div className="flex gap-2">
+                            {p.status === 'Requested' && (
+                              <>
+                                <Button size="sm" onClick={() => handleApprovePayout(p.id)}><ThumbsUp className="h-3.5 w-3.5 mr-1" /> Approve</Button>
+                                <Button size="sm" variant="destructive" onClick={() => handleRejectPayout(p.id)}><ThumbsDown className="h-3.5 w-3.5 mr-1" /> Reject</Button>
+                              </>
+                            )}
+                            {p.status === 'Approved' && (
+                              <>
+                                <Button size="sm" onClick={() => handleAdvancePayoutStatus(p.id, 'Processing')}><ArrowRight className="h-3.5 w-3.5 mr-1" /> Start Processing</Button>
+                                <Button size="sm" variant="destructive" onClick={() => handleAdvancePayoutStatus(p.id, 'Failed')}><XCircle className="h-3.5 w-3.5 mr-1" /> Fail</Button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex gap-2">
-                          {p.status === 'Requested' && (
-                            <>
-                              <Button size="sm" onClick={() => handleApprovePayout(p.id)}><ThumbsUp className="h-3.5 w-3.5 mr-1" /> Approve</Button>
-                              <Button size="sm" variant="destructive" onClick={() => handleRejectPayout(p.id)}><ThumbsDown className="h-3.5 w-3.5 mr-1" /> Reject</Button>
-                            </>
-                          )}
-                          {p.status === 'Approved' && (
-                            <>
-                              <Button size="sm" onClick={() => handleAdvancePayoutStatus(p.id, 'Processing')}><ArrowRight className="h-3.5 w-3.5 mr-1" /> Start Processing</Button>
-                              <Button size="sm" variant="destructive" onClick={() => handleAdvancePayoutStatus(p.id, 'Failed')}><XCircle className="h-3.5 w-3.5 mr-1" /> Fail</Button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -967,36 +1062,77 @@ const Funding = () => {
                 {filteredPayoutHistory.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">No payout records found.</p>
                 ) : (
-                  <Table>
-                    <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Type</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead><TableHead>Requested</TableHead><TableHead>Settlement</TableHead><TableHead>Trade Ref</TableHead><TableHead className="w-24">Actions</TableHead></TableRow></TableHeader>
-                    <TableBody>
-                      {filteredPayoutHistory.map(p => (
-                        <TableRow key={p.id}>
-                          <TableCell className="font-medium">{(p as any).clients?.client_name || '—'}</TableCell>
-                          <TableCell><Badge variant="outline">{p.payout_type}</Badge></TableCell>
-                          <TableCell className="font-semibold">{formatCurrency(Number(p.amount))}</TableCell>
-                          <TableCell>
-                            <Badge variant={p.status === 'Completed' ? 'default' : p.status === 'Failed' ? 'destructive' : p.status === 'Processing' ? 'outline' : 'secondary'}>
-                              {p.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{format(new Date(p.requested_date), 'dd MMM yyyy')}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{p.settlement_date ? format(new Date(p.settlement_date), 'dd MMM yyyy') : '—'}</TableCell>
-                          <TableCell className="font-mono text-sm">{p.linked_trade_id || '—'}</TableCell>
-                          <TableCell>
-                            <div className="flex gap-1">
-                              {p.status === 'Processing' && (
-                                <Button size="sm" variant="ghost" onClick={() => handleAdvancePayoutStatus(p.id, 'Completed')}><CheckCircle2 className="h-3.5 w-3.5" /></Button>
-                              )}
-                              {(p.status === 'Requested' || p.status === 'Approved') && (
-                                <Button size="sm" variant="ghost" onClick={() => handleDeletePayout(p.id)}><Trash2 className="h-3.5 w-3.5 text-muted-foreground" /></Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <div className="space-y-3">
+                    {filteredPayoutHistory.map(p => {
+                      const bal = balances.find(b => b.client_id === p.client_id);
+                      const settlementCleared = !bal || Number(bal.pending_cash) === 0;
+                      return (
+                        <Collapsible key={p.id}>
+                          <div className="border rounded-lg overflow-hidden">
+                            <CollapsibleTrigger asChild>
+                              <div className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors">
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-medium text-sm">{(p as any).clients?.client_name || '—'}</span>
+                                      <Badge variant="outline">{p.payout_type}</Badge>
+                                      <span className="font-semibold text-sm">{formatCurrency(Number(p.amount))}</span>
+                                      {p.linked_trade_id && <Badge variant="secondary" className="text-xs">Trade linked</Badge>}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      {format(new Date(p.requested_date), 'dd MMM yyyy')}
+                                      {p.settlement_date ? ` • Settlement: ${format(new Date(p.settlement_date), 'dd MMM yyyy')}` : ''}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant={p.status === 'Completed' ? 'default' : p.status === 'Failed' ? 'destructive' : p.status === 'Processing' ? 'outline' : 'secondary'}>
+                                    {p.status}
+                                  </Badge>
+                                  <div className="flex gap-1">
+                                    {p.status === 'Processing' && (
+                                      <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); handleAdvancePayoutStatus(p.id, 'Completed'); }}><CheckCircle2 className="h-3.5 w-3.5" /></Button>
+                                    )}
+                                    {(p.status === 'Requested' || p.status === 'Approved') && (
+                                      <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); handleDeletePayout(p.id); }}><Trash2 className="h-3.5 w-3.5 text-muted-foreground" /></Button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                              <div className="px-4 pb-4 space-y-4 border-t bg-muted/20 pt-4">
+                                {/* Payout Lifecycle Tracker */}
+                                <div>
+                                  <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">Payout Lifecycle</p>
+                                  <PayoutSettlementTracker status={p.status} settlementCleared={settlementCleared} isFailed={p.status === 'Failed'} />
+                                </div>
+                                {/* Settlement Timeline */}
+                                <div>
+                                  <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">Settlement Timeline</p>
+                                  <SettlementTimeline
+                                    tradeDate={p.linked_trade_id ? p.created_at : null}
+                                    settlementDate={p.settlement_date}
+                                    cashAvailableDate={settlementCleared && p.settlement_date ? p.settlement_date : null}
+                                    payoutRequestedDate={p.requested_date}
+                                    completedDate={p.status === 'Completed' ? p.created_at : null}
+                                    status={p.status}
+                                  />
+                                </div>
+                                {/* Details */}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                  <div><p className="text-muted-foreground text-xs">Trade Reference</p><p className="font-mono">{p.linked_trade_id ? p.linked_trade_id.slice(0, 12) + '...' : '—'}</p></div>
+                                  <div><p className="text-muted-foreground text-xs">Settlement Date</p><p className="font-medium">{p.settlement_date ? format(new Date(p.settlement_date), 'dd MMM yyyy') : '—'}</p></div>
+                                  <div><p className="text-muted-foreground text-xs">Approved By</p><p className="font-medium">{p.approved_by ? p.approved_by.slice(0, 8) + '...' : '—'}</p></div>
+                                  <div><p className="text-muted-foreground text-xs">Notes</p><p>{p.notes || '—'}</p></div>
+                                </div>
+                              </div>
+                            </CollapsibleContent>
+                          </div>
+                        </Collapsible>
+                      );
+                    })}
+                  </div>
                 )}
               </CardContent>
             </Card>
