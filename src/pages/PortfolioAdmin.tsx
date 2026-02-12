@@ -17,9 +17,10 @@ import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import {
   Briefcase, Plus, RefreshCw, Trash2, Edit, Eye, Layers, ArrowLeftRight,
-  TrendingUp, TrendingDown, Building2, DollarSign, Package, ClipboardList,
+  TrendingUp, TrendingDown, Building2, DollarSign, Package, ClipboardList, LayoutDashboard,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { TotalAssetView } from '@/components/portfolio-admin/TotalAssetView';
 
 // ─── Types ───
 interface Portfolio {
@@ -78,7 +79,7 @@ const txTypeBadge: Record<string, string> = {
 
 const PortfolioAdmin = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('total-assets');
   const [loading, setLoading] = useState(true);
 
   // Data
@@ -361,10 +362,21 @@ const PortfolioAdmin = () => {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
+            <TabsTrigger value="total-assets" className="gap-1"><LayoutDashboard className="h-4 w-4" /> Total Asset View</TabsTrigger>
             <TabsTrigger value="overview" className="gap-1"><Briefcase className="h-4 w-4" /> Overview</TabsTrigger>
             <TabsTrigger value="positions" className="gap-1"><Layers className="h-4 w-4" /> Positions</TabsTrigger>
             <TabsTrigger value="transactions" className="gap-1"><ArrowLeftRight className="h-4 w-4" /> Transactions</TabsTrigger>
           </TabsList>
+
+          {/* ─── TOTAL ASSET VIEW TAB ─── */}
+          <TabsContent value="total-assets" className="space-y-4">
+            <TotalAssetView
+              portfolios={portfolios}
+              positions={positions}
+              transactions={transactions}
+              displayCurrency={selectedPortfolio?.base_currency || 'INR'}
+            />
+          </TabsContent>
 
           {/* ─── OVERVIEW TAB ─── */}
           <TabsContent value="overview" className="space-y-4">
