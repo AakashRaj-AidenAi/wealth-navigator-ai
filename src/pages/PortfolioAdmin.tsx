@@ -17,11 +17,12 @@ import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import {
   Briefcase, Plus, RefreshCw, Trash2, Edit, Eye, Layers, ArrowLeftRight,
-  TrendingUp, TrendingDown, Building2, DollarSign, Package, ClipboardList, LayoutDashboard, Calculator,
+  TrendingUp, TrendingDown, Building2, DollarSign, Package, ClipboardList, LayoutDashboard, Calculator, Activity,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TotalAssetView } from '@/components/portfolio-admin/TotalAssetView';
 import { CostBasisView } from '@/components/portfolio-admin/CostBasisView';
+import { AccountingPerformanceView } from '@/components/portfolio-admin/AccountingPerformanceView';
 
 // ─── Types ───
 interface Portfolio {
@@ -368,6 +369,7 @@ const PortfolioAdmin = () => {
             <TabsTrigger value="positions" className="gap-1"><Layers className="h-4 w-4" /> Positions</TabsTrigger>
             <TabsTrigger value="transactions" className="gap-1"><ArrowLeftRight className="h-4 w-4" /> Transactions</TabsTrigger>
             <TabsTrigger value="cost-basis" className="gap-1"><Calculator className="h-4 w-4" /> Cost Basis</TabsTrigger>
+            <TabsTrigger value="accounting" className="gap-1"><Activity className="h-4 w-4" /> Accounting & Performance</TabsTrigger>
           </TabsList>
 
           {/* ─── TOTAL ASSET VIEW TAB ─── */}
@@ -622,6 +624,16 @@ const PortfolioAdmin = () => {
           {/* ─── COST BASIS TAB ─── */}
           <TabsContent value="cost-basis" className="space-y-4">
             <CostBasisView
+              transactions={transactions}
+              positions={positions}
+              selectedPortfolioId={selectedPortfolioId}
+              getPortfolioName={getPortfolioName}
+            />
+          </TabsContent>
+
+          {/* ─── ACCOUNTING & PERFORMANCE TAB ─── */}
+          <TabsContent value="accounting" className="space-y-4">
+            <AccountingPerformanceView
               transactions={transactions}
               positions={positions}
               selectedPortfolioId={selectedPortfolioId}
