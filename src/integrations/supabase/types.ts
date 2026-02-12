@@ -2157,45 +2157,63 @@ export type Database = {
           amount: number
           approved_by: string | null
           client_id: string
+          completed_at: string | null
           created_at: string
+          estimated_completion: string | null
           id: string
           linked_trade_id: string | null
           notes: string | null
           payout_type: string
           requested_date: string
+          reversal_reason: string | null
+          reversed_at: string | null
           settlement_date: string | null
+          stage_updated_at: string
           status: string
           updated_at: string
+          workflow_stage: string
         }
         Insert: {
           advisor_id: string
           amount: number
           approved_by?: string | null
           client_id: string
+          completed_at?: string | null
           created_at?: string
+          estimated_completion?: string | null
           id?: string
           linked_trade_id?: string | null
           notes?: string | null
           payout_type: string
           requested_date?: string
+          reversal_reason?: string | null
+          reversed_at?: string | null
           settlement_date?: string | null
+          stage_updated_at?: string
           status?: string
           updated_at?: string
+          workflow_stage?: string
         }
         Update: {
           advisor_id?: string
           amount?: number
           approved_by?: string | null
           client_id?: string
+          completed_at?: string | null
           created_at?: string
+          estimated_completion?: string | null
           id?: string
           linked_trade_id?: string | null
           notes?: string | null
           payout_type?: string
           requested_date?: string
+          reversal_reason?: string | null
+          reversed_at?: string | null
           settlement_date?: string | null
+          stage_updated_at?: string
           status?: string
           updated_at?: string
+          workflow_stage?: string
         }
         Relationships: [
           {
@@ -2203,6 +2221,44 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payout_status_history: {
+        Row: {
+          changed_by: string
+          created_at: string
+          from_stage: string | null
+          id: string
+          note: string | null
+          payout_id: string
+          to_stage: string
+        }
+        Insert: {
+          changed_by: string
+          created_at?: string
+          from_stage?: string | null
+          id?: string
+          note?: string | null
+          payout_id: string
+          to_stage: string
+        }
+        Update: {
+          changed_by?: string
+          created_at?: string
+          from_stage?: string | null
+          id?: string
+          note?: string | null
+          payout_id?: string
+          to_stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_status_history_payout_id_fkey"
+            columns: ["payout_id"]
+            isOneToOne: false
+            referencedRelation: "payout_requests"
             referencedColumns: ["id"]
           },
         ]

@@ -21,7 +21,7 @@ import {
   XCircle, AlertCircle, History, IndianRupee, Trash2, ChevronDown, ChevronRight,
   AlertTriangle, ArrowRight, Zap, FileText, Eye, Bell, Brain, TrendingDown,
   TrendingUp, Shield, Activity, Sparkles, BarChart3, Target, ArrowDownRight,
-  ClipboardList, BookOpen, ThumbsUp, ThumbsDown, Send, Ban,
+  ClipboardList, BookOpen, ThumbsUp, ThumbsDown, Send, Ban, Undo2,
 } from 'lucide-react';
 import { PayoutSettlementTracker, SettlementTimeline } from '@/components/funding/PayoutSettlementTracker';
 import { format, differenceInDays, addDays } from 'date-fns';
@@ -94,8 +94,11 @@ interface CashBalance {
 interface ClientOption { id: string; client_name: string; }
 interface PayoutRequest {
   id: string; client_id: string; advisor_id: string; payout_type: string;
-  amount: number; status: string; linked_trade_id: string | null;
+  amount: number; status: string; workflow_stage: string; stage_updated_at: string;
+  linked_trade_id: string | null;
   requested_date: string; approved_by: string | null; settlement_date: string | null;
+  completed_at: string | null; reversed_at: string | null; reversal_reason: string | null;
+  estimated_completion: string | null;
   notes: string | null; created_at: string;
   clients?: { client_name: string };
 }
@@ -509,7 +512,11 @@ const Funding = () => {
     // Auto-link trade reference if a linked trade ID is provided
     const tradeRef = payoutForm.linked_trade_id || null;
 
-    const { error } = await supabase.from('payout_requests').insert({
+    // Calculate estimated completion
+    const estDays = payoutForm.payout_type === 'Wire' ? 1 : payoutForm.payout_type === 'ACH' ? 2 : 7;
+    const estimatedCompletion = addDays(new Date(), estDays).toISOString();
+
+    const { data: newPayout, error } = await (supabase as any).from('payout_requests').insert({
       client_id: payoutForm.client_id,
       advisor_id: user.id,
       payout_type: payoutForm.payout_type,
@@ -517,8 +524,17 @@ const Funding = () => {
       linked_trade_id: tradeRef,
       settlement_date: payoutForm.settlement_date || null,
       notes: payoutForm.notes || null,
-    });
+      workflow_stage: 'requested',
+      estimated_completion: estimatedCompletion,
+    }).select().single();
     if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
+    // Log initial history
+    if (newPayout && user) {
+      await (supabase as any).from('payout_status_history').insert({
+        payout_id: newPayout.id, from_stage: null, to_stage: 'requested',
+        changed_by: user.id, note: `${payoutForm.payout_type} payout requested for ${formatCurrency(amount)}`,
+      });
+    }
     toast({ title: 'Payout request created' });
     setShowPayoutDialog(false);
     setPayoutForm({ client_id: '', payout_type: 'ACH', amount: '', linked_trade_id: '', settlement_date: '', notes: '' });
@@ -526,38 +542,99 @@ const Funding = () => {
   };
 
   const handleApprovePayout = async (id: string) => {
-    if (!user) return;
-    const { error } = await supabase.from('payout_requests').update({ status: 'Approved', approved_by: user.id }).eq('id', id);
-    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Payout approved' });
-    fetchAll();
+    await handleAdvancePayoutStage(id, 'approved');
   };
 
   const handleRejectPayout = async (id: string) => {
+    await handleAdvancePayoutStage(id, 'failed');
+  };
+
+  // Payout workflow stages per type
+  const PAYOUT_WORKFLOWS: Record<string, { stages: string[]; labels: Record<string, string>; estDays: number }> = {
+    ACH: { stages: ['requested', 'approved', 'processing', 'settled', 'completed'], labels: { requested: 'Requested', approved: 'Approved', processing: 'Processing', settled: 'Settled (T+1)', completed: 'Completed' }, estDays: 2 },
+    Wire: { stages: ['requested', 'approved', 'processing', 'completed'], labels: { requested: 'Requested', approved: 'Approved', processing: 'Processing', completed: 'Same-day' }, estDays: 1 },
+    TOA: { stages: ['requested', 'approved', 'transfer_initiated', 'in_transit', 'completed'], labels: { requested: 'Requested', approved: 'Approved', transfer_initiated: 'Transfer Initiated', in_transit: 'In Transit', completed: 'Completed' }, estDays: 7 },
+  };
+
+  const getPayoutNextStages = (payoutType: string, currentStage: string): string[] => {
+    const wf = PAYOUT_WORKFLOWS[payoutType] || PAYOUT_WORKFLOWS.ACH;
+    const idx = wf.stages.indexOf(currentStage);
+    if (idx === -1 || currentStage === 'completed' || currentStage === 'failed' || currentStage === 'reversed') return [];
+    const next: string[] = [];
+    if (idx + 1 < wf.stages.length) next.push(wf.stages[idx + 1]);
+    next.push('failed');
+    return next;
+  };
+
+  const handleAdvancePayoutStage = async (id: string, nextStage: string) => {
     if (!user) return;
-    const { error } = await supabase.from('payout_requests').update({ status: 'Failed' }).eq('id', id);
+    const payout = payoutRequests.find(p => p.id === id);
+    if (!payout) return;
+    const prevStage = payout.workflow_stage;
+    const wf = PAYOUT_WORKFLOWS[payout.payout_type] || PAYOUT_WORKFLOWS.ACH;
+
+    const newStatus = nextStage === 'completed' ? 'Completed' : nextStage === 'failed' ? 'Failed' : nextStage === 'approved' ? 'Approved' : 'Processing';
+    const updates: any = {
+      status: newStatus,
+      workflow_stage: nextStage,
+      stage_updated_at: new Date().toISOString(),
+    };
+    if (nextStage === 'completed') updates.completed_at = new Date().toISOString();
+
+    const { error } = await (supabase as any).from('payout_requests').update(updates).eq('id', id);
     if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Payout rejected' });
+
+    // Log history
+    await (supabase as any).from('payout_status_history').insert({
+      payout_id: id, from_stage: prevStage, to_stage: nextStage,
+      changed_by: user.id, note: `${wf.labels[prevStage] || prevStage} → ${wf.labels[nextStage] || nextStage}`,
+    });
+
+    // Auto-deduct cash on completion
+    if (nextStage === 'completed') {
+      const existing = balances.find(b => b.client_id === payout.client_id);
+      if (existing) {
+        await supabase.from('cash_balances').update({
+          available_cash: Math.max(0, Number(existing.available_cash) - Number(payout.amount)),
+          last_updated: new Date().toISOString(),
+        }).eq('id', existing.id);
+      }
+    }
+
+    toast({ title: `Payout advanced to ${wf.labels[nextStage] || nextStage}` });
     fetchAll();
   };
 
-  const handleAdvancePayoutStatus = async (id: string, newStatus: string) => {
-    const { error } = await supabase.from('payout_requests').update({ status: newStatus }).eq('id', id);
+  const handleReversePayout = async (id: string, reason: string) => {
+    if (!user) return;
+    const payout = payoutRequests.find(p => p.id === id);
+    if (!payout || payout.status !== 'Completed') return;
+
+    const { error } = await (supabase as any).from('payout_requests').update({
+      reversed_at: new Date().toISOString(),
+      reversal_reason: reason,
+      workflow_stage: 'reversed',
+      status: 'Failed',
+      stage_updated_at: new Date().toISOString(),
+    }).eq('id', id);
     if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-    if (newStatus === 'Completed') {
-      // Deduct from cash balance
-      const payout = payoutRequests.find(p => p.id === id);
-      if (payout) {
-        const existing = balances.find(b => b.client_id === payout.client_id);
-        if (existing) {
-          await supabase.from('cash_balances').update({
-            available_cash: Math.max(0, Number(existing.available_cash) - Number(payout.amount)),
-            last_updated: new Date().toISOString(),
-          }).eq('id', existing.id);
-        }
-      }
+
+    // Restore cash balance
+    const existing = balances.find(b => b.client_id === payout.client_id);
+    if (existing) {
+      await supabase.from('cash_balances').update({
+        available_cash: Number(existing.available_cash) + Number(payout.amount),
+        last_updated: new Date().toISOString(),
+      }).eq('id', existing.id);
     }
-    toast({ title: `Payout status updated to ${newStatus}` });
+
+    // Log history
+    await (supabase as any).from('payout_status_history').insert({
+      payout_id: id, from_stage: 'completed', to_stage: 'reversed',
+      changed_by: user.id, note: `Reversed: ${reason}`,
+    });
+
+    toast({ title: 'Payout reversed, cash restored' });
     fetchAll();
   };
 
@@ -1018,18 +1095,30 @@ const Funding = () => {
                             />
                           </div>
 
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 flex-wrap">
                             {p.status === 'Requested' && (
                               <>
                                 <Button size="sm" onClick={() => handleApprovePayout(p.id)}><ThumbsUp className="h-3.5 w-3.5 mr-1" /> Approve</Button>
                                 <Button size="sm" variant="destructive" onClick={() => handleRejectPayout(p.id)}><ThumbsDown className="h-3.5 w-3.5 mr-1" /> Reject</Button>
                               </>
                             )}
-                            {p.status === 'Approved' && (
-                              <>
-                                <Button size="sm" onClick={() => handleAdvancePayoutStatus(p.id, 'Processing')}><ArrowRight className="h-3.5 w-3.5 mr-1" /> Start Processing</Button>
-                                <Button size="sm" variant="destructive" onClick={() => handleAdvancePayoutStatus(p.id, 'Failed')}><XCircle className="h-3.5 w-3.5 mr-1" /> Fail</Button>
-                              </>
+                            {p.status !== 'Requested' && p.status !== 'Completed' && p.status !== 'Failed' && (() => {
+                              const nextStages = getPayoutNextStages(p.payout_type, p.workflow_stage);
+                              const wf = PAYOUT_WORKFLOWS[p.payout_type] || PAYOUT_WORKFLOWS.ACH;
+                              return nextStages.map(ns => (
+                                <Button key={ns} size="sm" variant={ns === 'failed' ? 'destructive' : 'default'} onClick={() => handleAdvancePayoutStage(p.id, ns)}>
+                                  {ns === 'failed' ? <XCircle className="h-3.5 w-3.5 mr-1" /> : <ArrowRight className="h-3.5 w-3.5 mr-1" />}
+                                  {wf.labels[ns] || ns}
+                                </Button>
+                              ));
+                            })()}
+                            {p.status === 'Completed' && !p.reversed_at && (
+                              <Button size="sm" variant="outline" className="border-orange-500/50 text-orange-600" onClick={() => {
+                                const reason = prompt('Reversal reason:');
+                                if (reason) handleReversePayout(p.id, reason);
+                              }}>
+                                <Undo2 className="h-3.5 w-3.5 mr-1" /> Reverse
+                              </Button>
                             )}
                           </div>
                         </div>
@@ -1078,6 +1167,7 @@ const Funding = () => {
                                       <Badge variant="outline">{p.payout_type}</Badge>
                                       <span className="font-semibold text-sm">{formatCurrency(Number(p.amount))}</span>
                                       {p.linked_trade_id && <Badge variant="secondary" className="text-xs">Trade linked</Badge>}
+                                      {p.reversed_at && <Badge variant="outline" className="text-xs border-orange-500 text-orange-500">Reversed</Badge>}
                                     </div>
                                     <p className="text-xs text-muted-foreground mt-0.5">
                                       {format(new Date(p.requested_date), 'dd MMM yyyy')}
@@ -1086,12 +1176,23 @@ const Funding = () => {
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <Badge variant={p.status === 'Completed' ? 'default' : p.status === 'Failed' ? 'destructive' : p.status === 'Processing' ? 'outline' : 'secondary'}>
-                                    {p.status}
+                                  <Badge variant={p.reversed_at ? 'outline' : p.status === 'Completed' ? 'default' : p.status === 'Failed' ? 'destructive' : p.status === 'Processing' ? 'outline' : 'secondary'} className={p.reversed_at ? 'border-orange-500 text-orange-500' : ''}>
+                                    {p.reversed_at ? 'Reversed' : p.status}
                                   </Badge>
                                   <div className="flex gap-1">
-                                    {p.status === 'Processing' && (
-                                      <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); handleAdvancePayoutStatus(p.id, 'Completed'); }}><CheckCircle2 className="h-3.5 w-3.5" /></Button>
+                                    {p.workflow_stage !== 'completed' && p.workflow_stage !== 'failed' && p.workflow_stage !== 'reversed' && (() => {
+                                      const nextStages = getPayoutNextStages(p.payout_type, p.workflow_stage);
+                                      const wf = PAYOUT_WORKFLOWS[p.payout_type] || PAYOUT_WORKFLOWS.ACH;
+                                      return nextStages.filter(ns => ns !== 'failed').map(ns => (
+                                        <Button key={ns} size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); handleAdvancePayoutStage(p.id, ns); }} title={wf.labels[ns] || ns}>
+                                          <ArrowRight className="h-3.5 w-3.5" />
+                                        </Button>
+                                      ));
+                                    })()}
+                                    {p.status === 'Completed' && !p.reversed_at && (
+                                      <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); const reason = prompt('Reversal reason:'); if (reason) handleReversePayout(p.id, reason); }} title="Reverse">
+                                        <Undo2 className="h-3.5 w-3.5 text-orange-500" />
+                                      </Button>
                                     )}
                                     {(p.status === 'Requested' || p.status === 'Approved') && (
                                       <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); handleDeletePayout(p.id); }}><Trash2 className="h-3.5 w-3.5 text-muted-foreground" /></Button>
@@ -1105,7 +1206,7 @@ const Funding = () => {
                                 {/* Payout Lifecycle Tracker */}
                                 <div>
                                   <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">Payout Lifecycle</p>
-                                  <PayoutSettlementTracker status={p.status} settlementCleared={settlementCleared} isFailed={p.status === 'Failed'} />
+                                  <PayoutSettlementTracker status={p.reversed_at ? 'Reversed' : p.status} settlementCleared={settlementCleared} isFailed={p.status === 'Failed' && !p.reversed_at} />
                                 </div>
                                 {/* Settlement Timeline */}
                                 <div>
@@ -1115,15 +1216,22 @@ const Funding = () => {
                                     settlementDate={p.settlement_date}
                                     cashAvailableDate={settlementCleared && p.settlement_date ? p.settlement_date : null}
                                     payoutRequestedDate={p.requested_date}
-                                    completedDate={p.status === 'Completed' ? p.created_at : null}
-                                    status={p.status}
+                                    completedDate={p.completed_at || (p.status === 'Completed' ? p.created_at : null)}
+                                    status={p.reversed_at ? 'Reversed' : p.status}
                                   />
                                 </div>
+                                {/* Reversal info */}
+                                {p.reversed_at && (
+                                  <div className="rounded-lg border border-orange-500/50 bg-orange-500/5 p-3 text-sm">
+                                    <p className="font-medium text-orange-600 dark:text-orange-400">Reversed on {format(new Date(p.reversed_at), 'dd MMM yyyy, HH:mm')}</p>
+                                    {p.reversal_reason && <p className="text-muted-foreground mt-1">{p.reversal_reason}</p>}
+                                  </div>
+                                )}
                                 {/* Details */}
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                                   <div><p className="text-muted-foreground text-xs">Trade Reference</p><p className="font-mono">{p.linked_trade_id ? p.linked_trade_id.slice(0, 12) + '...' : '—'}</p></div>
                                   <div><p className="text-muted-foreground text-xs">Settlement Date</p><p className="font-medium">{p.settlement_date ? format(new Date(p.settlement_date), 'dd MMM yyyy') : '—'}</p></div>
-                                  <div><p className="text-muted-foreground text-xs">Approved By</p><p className="font-medium">{p.approved_by ? p.approved_by.slice(0, 8) + '...' : '—'}</p></div>
+                                  <div><p className="text-muted-foreground text-xs">Est. Completion</p><p className="font-medium">{p.estimated_completion ? format(new Date(p.estimated_completion), 'dd MMM yyyy') : '—'}</p></div>
                                   <div><p className="text-muted-foreground text-xs">Notes</p><p>{p.notes || '—'}</p></div>
                                 </div>
                               </div>
