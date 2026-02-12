@@ -52,6 +52,8 @@ import { AIDraftMessageModal, MeetingSummaryModal } from '@/components/ai-growth
 import { ClientRiskProfileTab } from '@/components/risk-profiling';
 import { useEngagementScores } from '@/hooks/useEngagementScores';
 import { EngagementBadge } from '@/components/clients/EngagementBadge';
+import { useChurnPredictions } from '@/hooks/useChurnPredictions';
+import { ChurnRiskBadge } from '@/components/clients/ChurnRiskBadge';
 interface Client {
   id: string;
   client_name: string;
@@ -113,6 +115,8 @@ const ClientProfile = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const { getScoreForClient, calculateAndUpsert } = useEngagementScores();
   const engagementData = id ? getScoreForClient(id) : undefined;
+  const { getPredictionForClient, calculateAndUpsert: calculateChurn } = useChurnPredictions();
+  const churnData = id ? getPredictionForClient(id) : undefined;
   const fetchClient = async () => {
     if (!id) return;
     
@@ -229,6 +233,7 @@ const ClientProfile = () => {
                       </Badge>
                     ))}
                     <EngagementBadge score={engagementData?.engagement_score} size="md" />
+                    <ChurnRiskBadge percentage={churnData?.churn_risk_percentage} size="md" />
                   </div>
                 </div>
                 <div className="ml-auto flex items-center gap-2 flex-wrap">
@@ -238,10 +243,14 @@ const ClientProfile = () => {
                         variant="outline"
                         size="sm"
                         className="gap-2"
-                        onClick={() => client && calculateAndUpsert(client.id)}
+                        onClick={async () => {
+                          if (!client) return;
+                          await calculateAndUpsert(client.id);
+                          await calculateChurn(client.id);
+                        }}
                       >
                         <Activity className="h-4 w-4" />
-                        Recalculate Score
+                        Analyze Client
                       </Button>
                       <Button 
                         variant="outline" 

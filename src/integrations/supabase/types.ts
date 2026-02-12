@@ -328,6 +328,65 @@ export type Database = {
           },
         ]
       }
+      churn_predictions: {
+        Row: {
+          advisor_id: string
+          calculated_at: string
+          campaign_responses: number | null
+          churn_risk_percentage: number
+          client_id: string
+          created_at: string
+          days_since_interaction: number | null
+          engagement_score: number | null
+          id: string
+          risk_factors: Json | null
+          risk_level: string | null
+          sip_stopped: boolean | null
+          total_campaigns: number | null
+          updated_at: string
+        }
+        Insert: {
+          advisor_id: string
+          calculated_at?: string
+          campaign_responses?: number | null
+          churn_risk_percentage?: number
+          client_id: string
+          created_at?: string
+          days_since_interaction?: number | null
+          engagement_score?: number | null
+          id?: string
+          risk_factors?: Json | null
+          risk_level?: string | null
+          sip_stopped?: boolean | null
+          total_campaigns?: number | null
+          updated_at?: string
+        }
+        Update: {
+          advisor_id?: string
+          calculated_at?: string
+          campaign_responses?: number | null
+          churn_risk_percentage?: number
+          client_id?: string
+          created_at?: string
+          days_since_interaction?: number | null
+          engagement_score?: number | null
+          id?: string
+          risk_factors?: Json | null
+          risk_level?: string | null
+          sip_stopped?: boolean | null
+          total_campaigns?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "churn_predictions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_activities: {
         Row: {
           activity_type: Database["public"]["Enums"]["activity_type"]
