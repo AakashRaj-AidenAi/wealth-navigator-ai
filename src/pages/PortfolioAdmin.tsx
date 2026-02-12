@@ -17,10 +17,11 @@ import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import {
   Briefcase, Plus, RefreshCw, Trash2, Edit, Eye, Layers, ArrowLeftRight,
-  TrendingUp, TrendingDown, Building2, DollarSign, Package, ClipboardList, LayoutDashboard,
+  TrendingUp, TrendingDown, Building2, DollarSign, Package, ClipboardList, LayoutDashboard, Calculator,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TotalAssetView } from '@/components/portfolio-admin/TotalAssetView';
+import { CostBasisView } from '@/components/portfolio-admin/CostBasisView';
 
 // ─── Types ───
 interface Portfolio {
@@ -366,6 +367,7 @@ const PortfolioAdmin = () => {
             <TabsTrigger value="overview" className="gap-1"><Briefcase className="h-4 w-4" /> Overview</TabsTrigger>
             <TabsTrigger value="positions" className="gap-1"><Layers className="h-4 w-4" /> Positions</TabsTrigger>
             <TabsTrigger value="transactions" className="gap-1"><ArrowLeftRight className="h-4 w-4" /> Transactions</TabsTrigger>
+            <TabsTrigger value="cost-basis" className="gap-1"><Calculator className="h-4 w-4" /> Cost Basis</TabsTrigger>
           </TabsList>
 
           {/* ─── TOTAL ASSET VIEW TAB ─── */}
@@ -615,6 +617,16 @@ const PortfolioAdmin = () => {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* ─── COST BASIS TAB ─── */}
+          <TabsContent value="cost-basis" className="space-y-4">
+            <CostBasisView
+              transactions={transactions}
+              positions={positions}
+              selectedPortfolioId={selectedPortfolioId}
+              getPortfolioName={getPortfolioName}
+            />
           </TabsContent>
         </Tabs>
 
