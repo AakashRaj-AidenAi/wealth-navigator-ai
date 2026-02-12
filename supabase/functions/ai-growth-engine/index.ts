@@ -127,20 +127,29 @@ serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    // Use anon key client with user's auth header for token validation
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
 
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: claimsData, error: authError } = await authClient.auth.getClaims(token);
     
-    if (authError || !user) {
+    if (authError || !claimsData?.claims) {
+      console.error('JWT validation error:', authError);
       return new Response(JSON.stringify({ error: 'Invalid token' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const advisorId = user.id;
+    // Use service role client for data queries (bypasses RLS)
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const advisorId = claimsData.claims.sub as string;
     const today = new Date();
 
     // Route to specific handlers
