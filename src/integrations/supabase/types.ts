@@ -61,6 +61,65 @@ export type Database = {
           },
         ]
       }
+      ai_meeting_summaries: {
+        Row: {
+          action_items: string[] | null
+          advisor_id: string
+          client_id: string | null
+          created_at: string
+          decisions_made: string[] | null
+          follow_up_date: string | null
+          id: string
+          key_discussion_points: string[] | null
+          next_steps: string[] | null
+          raw_notes: string
+          risks_discussed: string[] | null
+          summary: string
+          tasks_created: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          action_items?: string[] | null
+          advisor_id: string
+          client_id?: string | null
+          created_at?: string
+          decisions_made?: string[] | null
+          follow_up_date?: string | null
+          id?: string
+          key_discussion_points?: string[] | null
+          next_steps?: string[] | null
+          raw_notes: string
+          risks_discussed?: string[] | null
+          summary: string
+          tasks_created?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          action_items?: string[] | null
+          advisor_id?: string
+          client_id?: string | null
+          created_at?: string
+          decisions_made?: string[] | null
+          follow_up_date?: string | null
+          id?: string
+          key_discussion_points?: string[] | null
+          next_steps?: string[] | null
+          raw_notes?: string
+          risks_discussed?: string[] | null
+          summary?: string
+          tasks_created?: boolean | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_meeting_summaries_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
