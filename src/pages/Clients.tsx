@@ -45,6 +45,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
 import { useEngagementScores } from '@/hooks/useEngagementScores';
 import { EngagementBadge } from '@/components/clients/EngagementBadge';
+import { useChurnPredictions } from '@/hooks/useChurnPredictions';
+import { ChurnRiskBadge } from '@/components/clients/ChurnRiskBadge';
 
 interface Client {
   id: string;
@@ -93,8 +95,10 @@ const Clients = () => {
   const [riskFilter, setRiskFilter] = useState<string>('all');
   const [tagFilter, setTagFilter] = useState<string>('all');
   const [engagementFilter, setEngagementFilter] = useState<string>('all');
+  const [churnFilter, setChurnFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const { scores, getScoreForClient, calculateAll } = useEngagementScores();
+  const { predictions, getPredictionForClient } = useChurnPredictions();
   const [addClientOpen, setAddClientOpen] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
   const [clientTags, setClientTags] = useState<ClientTag[]>([]);
@@ -143,8 +147,19 @@ const Clients = () => {
       (engagementFilter === 'medium' && score && score.engagement_score >= 40 && score.engagement_score < 75) ||
       (engagementFilter === 'low' && score && score.engagement_score < 40) ||
       (engagementFilter === 'unscored' && !score);
-    return matchesSearch && matchesStatus && matchesRisk && matchesTag && matchesEngagement;
+    const churn = getPredictionForClient(client.id);
+    const matchesChurn = churnFilter === 'all' ||
+      (churnFilter === 'high' && churn && churn.churn_risk_percentage >= 70) ||
+      (churnFilter === 'medium' && churn && churn.churn_risk_percentage >= 40 && churn.churn_risk_percentage < 70) ||
+      (churnFilter === 'low' && churn && churn.churn_risk_percentage < 40) ||
+      (churnFilter === 'unscored' && !churn);
+    return matchesSearch && matchesStatus && matchesRisk && matchesTag && matchesEngagement && matchesChurn;
   }).sort((a, b) => {
+    if (churnFilter !== 'all') {
+      const riskA = getPredictionForClient(a.id)?.churn_risk_percentage ?? -1;
+      const riskB = getPredictionForClient(b.id)?.churn_risk_percentage ?? -1;
+      return riskB - riskA;
+    }
     if (engagementFilter !== 'all') {
       const scoreA = getScoreForClient(a.id)?.engagement_score ?? -1;
       const scoreB = getScoreForClient(b.id)?.engagement_score ?? -1;
@@ -238,6 +253,18 @@ const Clients = () => {
                 <SelectItem value="unscored">Unscored</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={churnFilter} onValueChange={setChurnFilter}>
+              <SelectTrigger className="w-40 bg-secondary/50">
+                <SelectValue placeholder="Churn Risk" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Churn Risk</SelectItem>
+                <SelectItem value="high">High Risk (70%+)</SelectItem>
+                <SelectItem value="medium">Medium (40–69%)</SelectItem>
+                <SelectItem value="low">Low (&lt;40%)</SelectItem>
+                <SelectItem value="unscored">Not Analyzed</SelectItem>
+              </SelectContent>
+            </Select>
             <div className="flex items-center border rounded-lg bg-secondary/50">
               <Button 
                 variant="ghost" 
@@ -291,6 +318,7 @@ const Clients = () => {
                 <TableRow className="bg-muted/30">
                   <TableHead>Client</TableHead>
                   <TableHead>Engagement</TableHead>
+                  <TableHead>Churn Risk</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Tags</TableHead>
                   <TableHead className="text-right">AUM</TableHead>
@@ -321,6 +349,9 @@ const Clients = () => {
                       </TableCell>
                       <TableCell>
                         <EngagementBadge score={getScoreForClient(client.id)?.engagement_score} />
+                      </TableCell>
+                      <TableCell>
+                        <ChurnRiskBadge percentage={getPredictionForClient(client.id)?.churn_risk_percentage} />
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={cn('capitalize', statusColors[client.status])}>
@@ -411,6 +442,10 @@ const Clients = () => {
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Engagement</span>
                       <EngagementBadge score={getScoreForClient(client.id)?.engagement_score} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Churn Risk</span>
+                      <ChurnRiskBadge percentage={getPredictionForClient(client.id)?.churn_risk_percentage} />
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Total Assets</span>
