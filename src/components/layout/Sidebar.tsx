@@ -87,7 +87,7 @@ export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
       </div>
 
       {/* Navigation */}
-      <nav className="flex flex-col h-[calc(100vh-4rem)] p-3">
+      <nav className="flex flex-col h-[calc(100vh-4rem)] p-3 overflow-y-auto">
         {/* Main Nav */}
         <div className="space-y-1">
           {!collapsed && (
