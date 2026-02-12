@@ -2,10 +2,11 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useClientAUM, useRevenueRecords, useInvoices } from '@/hooks/useBusiness';
+import { useClientAUM, useRevenueRecords, useInvoices, usePayments } from '@/hooks/useBusiness';
 import { formatCurrencyShort, formatCurrency } from '@/lib/currency';
-import { BarChart3, TrendingUp, Users, IndianRupee, PieChart, Wallet, FileText, LineChart, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, IndianRupee, PieChart, Wallet, FileText, LineChart, ArrowUpRight, ArrowDownRight, Loader2, AlertTriangle, CheckCircle2, DollarSign } from 'lucide-react';
 import { ResponsiveContainer, PieChart as RePieChart, Pie, Cell, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { startOfMonth, endOfMonth, isPast } from 'date-fns';
 
 const CHART_COLORS = [
   'hsl(43, 74%, 49%)',
@@ -19,18 +20,17 @@ const CEODashboard = () => {
   const { data: aumRecords, isLoading: aumLoading } = useClientAUM();
   const { data: revenueRecords, isLoading: revLoading } = useRevenueRecords();
   const { data: invoices, isLoading: invLoading } = useInvoices();
+  const { data: allPayments, isLoading: payLoading } = usePayments();
 
-  const isLoading = aumLoading || revLoading || invLoading;
+  const isLoading = aumLoading || revLoading || invLoading || payLoading;
 
   const metrics = useMemo(() => {
     const totalAUM = aumRecords?.reduce((s: number, r: any) => s + (r.current_aum || 0), 0) ?? 0;
     const activeClients = aumRecords?.filter((r: any) => (r.current_aum || 0) > 0).length ?? 0;
 
-    // Simulated growth
     const prevAUM = totalAUM * 0.97;
     const growthPct = prevAUM > 0 ? ((totalAUM - prevAUM) / prevAUM * 100) : 0;
     const newAUM = totalAUM - prevAUM;
-    const lostAUM = 0; // placeholder
 
     const monthlyRevenue = revenueRecords?.reduce((s: number, r: any) => {
       const d = new Date(r.date);
@@ -38,7 +38,41 @@ const CEODashboard = () => {
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() ? s + (r.amount || 0) : s;
     }, 0) ?? 0;
 
-    const pendingInvoices = invoices?.filter((inv: any) => inv.status === 'sent' || inv.status === 'draft' || inv.status === 'overdue').length ?? 0;
+    // Invoice analytics
+    const now = new Date();
+    const monthStart = startOfMonth(now);
+    const monthEnd = endOfMonth(now);
+
+    const paymentsMap: Record<string, number> = {};
+    allPayments?.forEach((p: any) => {
+      paymentsMap[p.invoice_id] = (paymentsMap[p.invoice_id] || 0) + (p.amount_received || 0);
+    });
+
+    let totalOutstanding = 0;
+    let overdueCount = 0;
+    let totalOverdue = 0;
+    let totalBilledMonth = 0;
+    let collectedThisMonth = 0;
+
+    invoices?.forEach((inv: any) => {
+      const paid = paymentsMap[inv.id] || 0;
+      const outstanding = (inv.total_amount || 0) - paid;
+      const isOverdue = inv.due_date && isPast(new Date(inv.due_date)) && inv.status !== 'paid';
+      const created = new Date(inv.created_at);
+
+      if (inv.status !== 'paid' && outstanding > 0) totalOutstanding += outstanding;
+      if (isOverdue && outstanding > 0) { overdueCount++; totalOverdue += outstanding; }
+      if (created >= monthStart && created <= monthEnd) totalBilledMonth += inv.total_amount || 0;
+    });
+
+    allPayments?.forEach((p: any) => {
+      const pd = new Date(p.payment_date);
+      if (pd >= monthStart && pd <= monthEnd) collectedThisMonth += p.amount_received || 0;
+    });
+
+    const collectionEfficiency = totalBilledMonth > 0 ? (collectedThisMonth / totalBilledMonth * 100) : 0;
+
+    const pendingInvoices = invoices?.filter((inv: any) => inv.status !== 'paid').length ?? 0;
 
     // Allocation breakdown
     const totalEquity = aumRecords?.reduce((s: number, r: any) => s + (r.equity_aum || 0), 0) ?? 0;
@@ -50,7 +84,6 @@ const CEODashboard = () => {
       { name: 'Other', value: totalOther },
     ].filter(d => d.value > 0);
 
-    // AUM trend (simulated from current)
     const months = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb'];
     const trendData = months.map((m, i) => ({
       month: m,
@@ -58,16 +91,21 @@ const CEODashboard = () => {
     }));
     if (trendData.length) trendData[trendData.length - 1].aum = totalAUM;
 
-    return { totalAUM, growthPct, newAUM, lostAUM, activeClients, monthlyRevenue, pendingInvoices, allocationData, trendData };
-  }, [aumRecords, revenueRecords, invoices]);
+    return { totalAUM, growthPct, newAUM, activeClients, monthlyRevenue, pendingInvoices, allocationData, trendData, totalOutstanding, overdueCount, totalOverdue, collectedThisMonth, collectionEfficiency };
+  }, [aumRecords, revenueRecords, invoices, allPayments]);
 
   const kpiCards = [
     { title: 'Total AUM', value: formatCurrencyShort(metrics.totalAUM), icon: TrendingUp, description: `Across ${metrics.activeClients} active clients` },
-    { title: 'AUM Growth', value: `${metrics.growthPct >= 0 ? '+' : ''}${metrics.growthPct.toFixed(1)}%`, icon: metrics.growthPct >= 0 ? ArrowUpRight : ArrowDownRight, description: 'vs. last month', highlight: metrics.growthPct >= 0 ? 'text-success' : 'text-destructive' },
-    { title: 'New AUM This Month', value: formatCurrencyShort(metrics.newAUM), icon: TrendingUp, description: 'Net inflow' },
+    { title: 'AUM Growth', value: `${metrics.growthPct >= 0 ? '+' : ''}${metrics.growthPct.toFixed(1)}%`, icon: metrics.growthPct >= 0 ? ArrowUpRight : ArrowDownRight, description: 'vs. last month', highlight: metrics.growthPct >= 0 ? 'text-green-500' : 'text-destructive' },
     { title: 'Monthly Revenue', value: formatCurrencyShort(metrics.monthlyRevenue), icon: IndianRupee, description: 'Current month' },
     { title: 'Active Clients', value: String(metrics.activeClients), icon: Users, description: 'With AUM > 0' },
-    { title: 'Pending Invoices', value: String(metrics.pendingInvoices), icon: BarChart3, description: 'Awaiting payment' },
+  ];
+
+  const invoiceCards = [
+    { title: 'Outstanding Invoices', value: formatCurrencyShort(metrics.totalOutstanding), icon: DollarSign, description: `${metrics.pendingInvoices} unpaid` },
+    { title: 'Overdue Payments', value: formatCurrencyShort(metrics.totalOverdue), icon: AlertTriangle, description: `${metrics.overdueCount} overdue`, highlight: metrics.overdueCount > 0 ? 'text-destructive' : '' },
+    { title: 'Collected This Month', value: formatCurrencyShort(metrics.collectedThisMonth), icon: CheckCircle2, description: 'Payments received' },
+    { title: 'Collection Efficiency', value: `${metrics.collectionEfficiency.toFixed(1)}%`, icon: BarChart3, description: 'Collected / billed', highlight: metrics.collectionEfficiency >= 80 ? 'text-green-500' : metrics.collectionEfficiency >= 50 ? 'text-amber-500' : 'text-destructive' },
   ];
 
   return (
@@ -82,8 +120,8 @@ const CEODashboard = () => {
           <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
         ) : (
           <>
-            {/* KPI Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {/* AUM & Revenue KPIs */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               {kpiCards.map((card) => (
                 <Card key={card.title}>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -96,6 +134,25 @@ const CEODashboard = () => {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+
+            {/* Invoice & Collection KPIs */}
+            <div>
+              <h2 className="text-lg font-semibold text-foreground mb-3">Billing & Collections</h2>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {invoiceCards.map((card) => (
+                  <Card key={card.title}>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
+                      <card.icon className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className={`text-2xl font-bold ${card.highlight ?? ''}`}>{card.value}</div>
+                      <p className="text-xs text-muted-foreground">{card.description}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </div>
 
             {/* Charts */}
