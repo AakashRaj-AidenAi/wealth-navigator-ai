@@ -30,6 +30,7 @@ import Revenue from "./pages/business/Revenue";
 import Commissions from "./pages/business/Commissions";
 import InvoicesPage from "./pages/business/Invoices";
 import Profitability from "./pages/business/Profitability";
+import Funding from "./pages/Funding";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -81,6 +82,7 @@ const AppRoutes = () => (
     <Route path="/business/commissions" element={<ProtectedRoute><Commissions /></ProtectedRoute>} />
     <Route path="/business/invoices" element={<ProtectedRoute><InvoicesPage /></ProtectedRoute>} />
     <Route path="/business/profitability" element={<ProtectedRoute><Profitability /></ProtectedRoute>} />
+    <Route path="/funding" element={<ProtectedRoute><Funding /></ProtectedRoute>} />
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
     <Route path="*" element={<NotFound />} />
   </Routes>
