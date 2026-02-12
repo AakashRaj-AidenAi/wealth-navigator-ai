@@ -2184,6 +2184,7 @@ export type Database = {
         | "note"
         | "document"
         | "reminder"
+        | "silent_alert"
       app_role: "wealth_advisor" | "compliance_officer" | "client"
       client_tag:
         | "hni"
@@ -2263,6 +2264,7 @@ export type Database = {
         | "quarterly_review"
         | "sip_missed"
         | "recurring"
+        | "silent_client_followup"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2397,6 +2399,7 @@ export const Constants = {
         "note",
         "document",
         "reminder",
+        "silent_alert",
       ],
       app_role: ["wealth_advisor", "compliance_officer", "client"],
       client_tag: [
@@ -2485,6 +2488,7 @@ export const Constants = {
         "quarterly_review",
         "sip_missed",
         "recurring",
+        "silent_client_followup",
       ],
     },
   },

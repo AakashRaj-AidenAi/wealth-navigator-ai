@@ -12,6 +12,7 @@ import { LeadsPipelineWidget } from '@/components/dashboard/LeadsPipelineWidget'
 import { LeadsNeedingAttentionWidget } from '@/components/dashboard/LeadsNeedingAttentionWidget';
 import { CorporateActionsWidget } from '@/components/dashboard/CorporateActionsWidget';
 import { ClientsAtRiskWidget } from '@/components/dashboard/ClientsAtRiskWidget';
+import { SilentClientsWidget } from '@/components/dashboard/SilentClientsWidget';
 import { AIInsightsCenter } from '@/components/ai-growth-engine';
 import { AICopilot } from '@/components/ai/AICopilot';
 import { supabase } from '@/integrations/supabase/client';
@@ -250,6 +251,7 @@ const Dashboard = () => {
 
           {/* Right Column - Widgets */}
           <div className="space-y-6">
+            <SilentClientsWidget />
             <ClientsAtRiskWidget />
             <AlertsPanel />
             <CorporateActionsWidget />
