@@ -2043,6 +2043,56 @@ export type Database = {
           },
         ]
       }
+      sentiment_logs: {
+        Row: {
+          advisor_id: string
+          analyzed_at: string
+          client_id: string
+          confidence_score: number | null
+          created_at: string
+          id: string
+          keywords_matched: string[] | null
+          sentiment: string
+          source_id: string | null
+          source_text: string
+          source_type: string
+        }
+        Insert: {
+          advisor_id: string
+          analyzed_at?: string
+          client_id: string
+          confidence_score?: number | null
+          created_at?: string
+          id?: string
+          keywords_matched?: string[] | null
+          sentiment: string
+          source_id?: string | null
+          source_text: string
+          source_type: string
+        }
+        Update: {
+          advisor_id?: string
+          analyzed_at?: string
+          client_id?: string
+          confidence_score?: number | null
+          created_at?: string
+          id?: string
+          keywords_matched?: string[] | null
+          sentiment?: string
+          source_id?: string | null
+          source_text?: string
+          source_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sentiment_logs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           assigned_to: string

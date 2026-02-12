@@ -23,8 +23,10 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Phone, Mail, Calendar, MessageSquare, FileText, Bell, Clock, Loader2, Trash2 } from 'lucide-react';
+import { Plus, Phone, Mail, Calendar, MessageSquare, FileText, Bell, Clock, Loader2, Trash2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { SentimentBadge } from '@/components/clients/SentimentBadge';
+import { analyzeSentiment } from '@/hooks/useSentimentAnalysis';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,7 +58,8 @@ const activityIcons: Record<string, React.ElementType> = {
   meeting: Calendar,
   note: MessageSquare,
   document: FileText,
-  reminder: Bell
+  reminder: Bell,
+  silent_alert: AlertCircle
 };
 
 const activityColors: Record<string, string> = {
@@ -65,7 +68,8 @@ const activityColors: Record<string, string> = {
   meeting: 'bg-purple-500/10 text-purple-500',
   note: 'bg-amber-500/10 text-amber-500',
   document: 'bg-cyan-500/10 text-cyan-500',
-  reminder: 'bg-pink-500/10 text-pink-500'
+  reminder: 'bg-pink-500/10 text-pink-500',
+  silent_alert: 'bg-warning/10 text-warning'
 };
 
 export const ClientActivityTab = ({ clientId }: ClientActivityTabProps) => {
@@ -246,6 +250,11 @@ export const ClientActivityTab = ({ clientId }: ClientActivityTabProps) => {
                               <Badge variant="outline" className="text-xs bg-success/10 text-success border-success/20">
                                 Completed
                               </Badge>
+                            )}
+                            {activity.description && (
+                              <SentimentBadge sentiment={analyzeSentiment(
+                                [activity.title, activity.description].filter(Boolean).join(' ')
+                              ).sentiment} />
                             )}
                           </div>
                           <p className="font-medium">{activity.title}</p>

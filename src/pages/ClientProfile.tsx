@@ -54,6 +54,8 @@ import { useEngagementScores } from '@/hooks/useEngagementScores';
 import { EngagementBadge } from '@/components/clients/EngagementBadge';
 import { useChurnPredictions } from '@/hooks/useChurnPredictions';
 import { ChurnRiskBadge } from '@/components/clients/ChurnRiskBadge';
+import { useSentimentAnalysis } from '@/hooks/useSentimentAnalysis';
+import { SentimentBadge } from '@/components/clients/SentimentBadge';
 interface Client {
   id: string;
   client_name: string;
@@ -117,6 +119,8 @@ const ClientProfile = () => {
   const engagementData = id ? getScoreForClient(id) : undefined;
   const { getPredictionForClient, calculateAndUpsert: calculateChurn } = useChurnPredictions();
   const churnData = id ? getPredictionForClient(id) : undefined;
+  const { analyzeClientComms, getClientSentimentSummary, fetchLogs: fetchSentimentLogs } = useSentimentAnalysis();
+  const sentimentSummary = id ? getClientSentimentSummary(id) : null;
   const fetchClient = async () => {
     if (!id) return;
     
@@ -154,6 +158,7 @@ const ClientProfile = () => {
 
   useEffect(() => {
     fetchClient();
+    if (id) fetchSentimentLogs(id);
   }, [id]);
 
   const canEdit = role === 'wealth_advisor';
@@ -234,6 +239,9 @@ const ClientProfile = () => {
                     ))}
                     <EngagementBadge score={engagementData?.engagement_score} size="md" />
                     <ChurnRiskBadge percentage={churnData?.churn_risk_percentage} size="md" />
+                    {sentimentSummary && (
+                      <SentimentBadge sentiment={sentimentSummary.dominant} size="md" />
+                    )}
                   </div>
                 </div>
                 <div className="ml-auto flex items-center gap-2 flex-wrap">
@@ -251,6 +259,18 @@ const ClientProfile = () => {
                       >
                         <Activity className="h-4 w-4" />
                         Analyze Client
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={async () => {
+                          if (!client) return;
+                          await analyzeClientComms(client.id);
+                        }}
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        Analyze Sentiment
                       </Button>
                       <Button 
                         variant="outline" 
