@@ -32,7 +32,8 @@ import {
   Sparkles,
   Brain,
   ShieldCheck,
-  Activity
+  Activity,
+  Mic
 } from 'lucide-react';
 
 import { ClientOverviewTab } from '@/components/clients/ClientOverviewTab';
@@ -48,7 +49,7 @@ import { ClientCommunicationsTab } from '@/components/clients/ClientCommunicatio
 import { ClientCorporateActionsTab } from '@/components/clients/ClientCorporateActionsTab';
 import { EditClientModal } from '@/components/modals/EditClientModal';
 import { QuickNoteModal } from '@/components/clients/QuickNoteModal';
-import { AIDraftMessageModal, MeetingSummaryModal } from '@/components/ai-growth-engine';
+import { AIDraftMessageModal, MeetingSummaryModal, VoiceNoteModal } from '@/components/ai-growth-engine';
 import { ClientRiskProfileTab } from '@/components/risk-profiling';
 import { useEngagementScores } from '@/hooks/useEngagementScores';
 import { EngagementBadge } from '@/components/clients/EngagementBadge';
@@ -114,6 +115,7 @@ const ClientProfile = () => {
   const [quickNoteOpen, setQuickNoteOpen] = useState(false);
   const [aiDraftOpen, setAiDraftOpen] = useState(false);
   const [meetingSummaryOpen, setMeetingSummaryOpen] = useState(false);
+  const [voiceNoteOpen, setVoiceNoteOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const { getScoreForClient, calculateAndUpsert } = useEngagementScores();
   const engagementData = id ? getScoreForClient(id) : undefined;
@@ -289,6 +291,15 @@ const ClientProfile = () => {
                       >
                         <Brain className="h-4 w-4" />
                         Meeting Notes
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="gap-2 text-primary border-primary/30 hover:bg-primary/10"
+                        onClick={() => setVoiceNoteOpen(true)}
+                      >
+                        <Mic className="h-4 w-4" />
+                        Voice Note
                       </Button>
                       <Button 
                         variant="outline" 
@@ -483,6 +494,13 @@ const ClientProfile = () => {
       <MeetingSummaryModal
         open={meetingSummaryOpen}
         onOpenChange={setMeetingSummaryOpen}
+        clientId={client.id}
+        clientName={client.client_name}
+      />
+
+      <VoiceNoteModal
+        open={voiceNoteOpen}
+        onOpenChange={setVoiceNoteOpen}
         clientId={client.id}
         clientName={client.client_name}
       />

@@ -2244,6 +2244,72 @@ export type Database = {
         }
         Relationships: []
       }
+      voice_note_transcriptions: {
+        Row: {
+          advisor_id: string
+          client_id: string | null
+          created_at: string
+          decisions: string[] | null
+          duration_seconds: number | null
+          file_name: string
+          file_size: number | null
+          follow_up_actions: string[] | null
+          id: string
+          raw_transcript: string
+          summary_id: string | null
+          tasks_created: boolean | null
+          topics_discussed: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          advisor_id: string
+          client_id?: string | null
+          created_at?: string
+          decisions?: string[] | null
+          duration_seconds?: number | null
+          file_name: string
+          file_size?: number | null
+          follow_up_actions?: string[] | null
+          id?: string
+          raw_transcript: string
+          summary_id?: string | null
+          tasks_created?: boolean | null
+          topics_discussed?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          advisor_id?: string
+          client_id?: string | null
+          created_at?: string
+          decisions?: string[] | null
+          duration_seconds?: number | null
+          file_name?: string
+          file_size?: number | null
+          follow_up_actions?: string[] | null
+          id?: string
+          raw_transcript?: string
+          summary_id?: string | null
+          tasks_created?: boolean | null
+          topics_discussed?: string[] | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voice_note_transcriptions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voice_note_transcriptions_summary_id_fkey"
+            columns: ["summary_id"]
+            isOneToOne: false
+            referencedRelation: "ai_meeting_summaries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
