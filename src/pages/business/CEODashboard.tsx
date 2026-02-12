@@ -5,11 +5,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
 import { useClientAUM, useRevenueRecords, useInvoices, usePayments, useCommissionRecords } from '@/hooks/useBusiness';
 import { formatCurrencyShort, formatCurrency } from '@/lib/currency';
-import { TrendingUp, IndianRupee, Wallet, FileText, LineChart as LineChartIcon, Loader2, AlertTriangle, DollarSign, Crown, Target, PieChart as PieChartIcon, ArrowUpRight, ArrowDownRight, Users, BarChart3 } from 'lucide-react';
+import { TrendingUp, IndianRupee, Wallet, FileText, LineChart as LineChartIcon, Loader2, AlertTriangle, DollarSign, Crown, Target, PieChart as PieChartIcon, ArrowUpRight, ArrowDownRight, Users, BarChart3, Filter, Building2 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, Cell, ScatterChart, Scatter, ZAxis } from 'recharts';
 import { format, subMonths, subQuarters, subYears, isAfter, addMonths } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import { CashLiquidityOverview } from '@/components/business/CashLiquidityOverview';
 
 const GOLD = 'hsl(43, 74%, 49%)';
 const GREEN = 'hsl(160, 84%, 39%)';
@@ -22,6 +26,8 @@ type DateRange = 'month' | 'quarter' | 'year';
 
 const CEODashboard = () => {
   const [dateRange, setDateRange] = useState<DateRange>('month');
+  const [advisorFilter, setAdvisorFilter] = useState<string>('all');
+  const [branchFilter, setBranchFilter] = useState<string>('');
 
   const { data: aumRecords, isLoading: aumLoading } = useClientAUM();
   const { data: revenueRecords, isLoading: revLoading } = useRevenueRecords();
@@ -29,7 +35,33 @@ const CEODashboard = () => {
   const { data: allPayments, isLoading: payLoading } = usePayments();
   const { data: commissionRecords, isLoading: comLoading } = useCommissionRecords();
 
-  const isLoading = aumLoading || revLoading || invLoading || payLoading || comLoading;
+  // Cash & Liquidity data
+  const { data: cashBalances, isLoading: cashLoading } = useQuery({
+    queryKey: ['cash-balances-all'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('cash_balances').select('*');
+      if (error) throw error;
+      return data;
+    },
+  });
+  const { data: fundingRequests, isLoading: fundingLoading } = useQuery({
+    queryKey: ['funding-requests-all'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('funding_requests').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+  const { data: payoutRequests, isLoading: payoutLoading } = useQuery({
+    queryKey: ['payout-requests-all'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('payout_requests').select('*').order('requested_date', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const isLoading = aumLoading || revLoading || invLoading || payLoading || comLoading || cashLoading || fundingLoading || payoutLoading;
 
   const rangeStart = useMemo(() => {
     const now = new Date();
@@ -159,22 +191,42 @@ const CEODashboard = () => {
   return (
     <MainLayout>
       <div className="space-y-5">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+        {/* Header + Global Filters */}
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground tracking-tight">Executive Dashboard</h1>
-            <p className="text-sm text-muted-foreground">Consolidated business performance view</p>
+            <p className="text-sm text-muted-foreground">Operations control tower — consolidated business performance</p>
           </div>
-          <Select value={dateRange} onValueChange={(v: DateRange) => setDateRange(v)}>
-            <SelectTrigger className="w-[140px] h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="month">Monthly</SelectItem>
-              <SelectItem value="quarter">Quarterly</SelectItem>
-              <SelectItem value="year">Yearly</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Filter className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Filters:</span>
+            </div>
+            <Select value={dateRange} onValueChange={(v: DateRange) => setDateRange(v)}>
+              <SelectTrigger className="w-[120px] h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="month">Monthly</SelectItem>
+                <SelectItem value="quarter">Quarterly</SelectItem>
+                <SelectItem value="year">Yearly</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={advisorFilter} onValueChange={setAdvisorFilter}>
+              <SelectTrigger className="w-[130px] h-8 text-xs">
+                <SelectValue placeholder="All Advisors" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Advisors</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              placeholder="Branch..."
+              value={branchFilter}
+              onChange={(e) => setBranchFilter(e.target.value)}
+              className="w-[120px] h-8 text-xs"
+            />
+          </div>
         </div>
 
         {isLoading ? (
@@ -202,6 +254,16 @@ const CEODashboard = () => {
                 </Card>
               ))}
             </div>
+
+            {/* ═══════ CASH & LIQUIDITY CONTROL TOWER ═══════ */}
+            <CashLiquidityOverview
+              cashBalances={cashBalances ?? null}
+              fundingRequests={fundingRequests ?? null}
+              payoutRequests={payoutRequests ?? null}
+              rangeStart={rangeStart}
+            />
+
+            <Separator />
 
             {/* ═══════ MIDDLE: Charts ═══════ */}
             <div className="grid gap-4 lg:grid-cols-3">
