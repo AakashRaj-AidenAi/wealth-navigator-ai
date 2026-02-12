@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { TotalAssetView } from '@/components/portfolio-admin/TotalAssetView';
 import { CostBasisView } from '@/components/portfolio-admin/CostBasisView';
 import { AccountingPerformanceView } from '@/components/portfolio-admin/AccountingPerformanceView';
+import { AdvancedPositionsView } from '@/components/portfolio-admin/AdvancedPositionsView';
 
 // ─── Types ───
 interface Portfolio {
@@ -493,67 +494,22 @@ const PortfolioAdmin = () => {
 
           {/* ─── POSITIONS TAB ─── */}
           <TabsContent value="positions" className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Holdings {selectedPortfolio ? `— ${selectedPortfolio.portfolio_name}` : ''}</h2>
-              <Button onClick={() => { setEditingId(null); setPositionForm({ portfolio_id: selectedPortfolioId || '', security_id: '', quantity: '', average_cost: '', current_price: '' }); setShowPositionDialog(true); }}>
-                <Plus className="h-4 w-4 mr-1" /> Add Position
-              </Button>
-            </div>
-            <Card>
-              <CardContent className="pt-4">
-                {filteredPositions.length === 0 ? (
-                  <p className="text-muted-foreground text-sm py-8 text-center">No positions yet.</p>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Security</TableHead>
-                        {!selectedPortfolioId && <TableHead>Portfolio</TableHead>}
-                        <TableHead className="text-right">Qty</TableHead>
-                        <TableHead className="text-right">Avg Cost</TableHead>
-                        <TableHead className="text-right">Current Price</TableHead>
-                        <TableHead className="text-right">Market Value</TableHead>
-                        <TableHead className="text-right">P&L</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredPositions.map(pos => {
-                        const costBasis = Number(pos.quantity) * Number(pos.average_cost);
-                        const mv = Number(pos.market_value || 0);
-                        const pnl = mv - costBasis;
-                        const pnlP = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
-                        return (
-                          <TableRow key={pos.id}>
-                            <TableCell className="font-medium">{pos.security_id}</TableCell>
-                            {!selectedPortfolioId && <TableCell className="text-muted-foreground">{getPortfolioName(pos.portfolio_id)}</TableCell>}
-                            <TableCell className="text-right">{Number(pos.quantity).toLocaleString()}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(Number(pos.average_cost))}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(Number(pos.current_price))}</TableCell>
-                            <TableCell className="text-right font-medium">{formatCurrency(mv)}</TableCell>
-                            <TableCell className={cn('text-right font-medium', pnl >= 0 ? 'text-emerald-500' : 'text-red-500')}>
-                              {formatCurrency(pnl)} <span className="text-xs">({pnlP.toFixed(1)}%)</span>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-1">
-                                <Button variant="ghost" size="icon" onClick={() => {
-                                  setEditingId(pos.id);
-                                  setPositionForm({ portfolio_id: pos.portfolio_id, security_id: pos.security_id, quantity: String(pos.quantity), average_cost: String(pos.average_cost), current_price: String(pos.current_price) });
-                                  setShowPositionDialog(true);
-                                }}><Edit className="h-4 w-4" /></Button>
-                                <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeletePosition(pos.id)}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
+            <AdvancedPositionsView
+              positions={positions}
+              selectedPortfolioId={selectedPortfolioId}
+              getPortfolioName={getPortfolioName}
+              onAddPosition={() => {
+                setEditingId(null);
+                setPositionForm({ portfolio_id: selectedPortfolioId || '', security_id: '', quantity: '', average_cost: '', current_price: '' });
+                setShowPositionDialog(true);
+              }}
+              onEditPosition={(pos) => {
+                setEditingId(pos.id);
+                setPositionForm({ portfolio_id: pos.portfolio_id, security_id: pos.security_id, quantity: String(pos.quantity), average_cost: String(pos.average_cost), current_price: String(pos.current_price) });
+                setShowPositionDialog(true);
+              }}
+              onDeletePosition={handleDeletePosition}
+            />
           </TabsContent>
 
           {/* ─── TRANSACTIONS TAB ─── */}
