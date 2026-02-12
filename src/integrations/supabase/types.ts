@@ -2403,6 +2403,176 @@ export type Database = {
           },
         ]
       }
+      portfolio_admin_accounts: {
+        Row: {
+          account_type: string
+          created_at: string
+          custodian_name: string | null
+          id: string
+          portfolio_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_type?: string
+          created_at?: string
+          custodian_name?: string | null
+          id?: string
+          portfolio_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_type?: string
+          created_at?: string
+          custodian_name?: string | null
+          id?: string
+          portfolio_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portfolio_admin_accounts_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_admin_portfolios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portfolio_admin_portfolios: {
+        Row: {
+          advisor_id: string
+          base_currency: string
+          client_id: string
+          created_at: string
+          id: string
+          portfolio_name: string
+          updated_at: string
+        }
+        Insert: {
+          advisor_id: string
+          base_currency?: string
+          client_id: string
+          created_at?: string
+          id?: string
+          portfolio_name: string
+          updated_at?: string
+        }
+        Update: {
+          advisor_id?: string
+          base_currency?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          portfolio_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portfolio_admin_portfolios_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portfolio_admin_positions: {
+        Row: {
+          average_cost: number
+          created_at: string
+          current_price: number
+          id: string
+          market_value: number | null
+          portfolio_id: string
+          quantity: number
+          security_id: string
+          updated_at: string
+        }
+        Insert: {
+          average_cost?: number
+          created_at?: string
+          current_price?: number
+          id?: string
+          market_value?: number | null
+          portfolio_id: string
+          quantity?: number
+          security_id: string
+          updated_at?: string
+        }
+        Update: {
+          average_cost?: number
+          created_at?: string
+          current_price?: number
+          id?: string
+          market_value?: number | null
+          portfolio_id?: string
+          quantity?: number
+          security_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portfolio_admin_positions_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_admin_portfolios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portfolio_admin_transactions: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          portfolio_id: string
+          price: number
+          quantity: number
+          security_id: string
+          settlement_date: string | null
+          total_amount: number
+          trade_date: string
+          transaction_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          portfolio_id: string
+          price?: number
+          quantity?: number
+          security_id: string
+          settlement_date?: string | null
+          total_amount?: number
+          trade_date?: string
+          transaction_type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          portfolio_id?: string
+          price?: number
+          quantity?: number
+          security_id?: string
+          settlement_date?: string | null
+          total_amount?: number
+          trade_date?: string
+          transaction_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portfolio_admin_transactions_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_admin_portfolios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null

@@ -22,6 +22,7 @@ import {
   Megaphone,
   CircleDollarSign,
   Wallet,
+  ClipboardList,
 } from 'lucide-react';
 
 interface NavItem {
@@ -47,6 +48,7 @@ const mainNavItems: NavItem[] = [
   { label: 'Reports', icon: BarChart3, href: '/reports' },
   { label: 'Business', icon: CircleDollarSign, href: '/business' },
   { label: 'Funding', icon: Wallet, href: '/funding' },
+  { label: 'Portfolio Admin', icon: ClipboardList, href: '/portfolio-admin' },
 ];
 
 const secondaryNavItems: NavItem[] = [
