@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
@@ -18,7 +19,8 @@ import { toast } from '@/hooks/use-toast';
 import {
   Wallet, Plus, RefreshCw, Building2, ArrowUpRight, Clock, CheckCircle2,
   XCircle, AlertCircle, History, IndianRupee, Trash2, ChevronDown, ChevronRight,
-  AlertTriangle, ArrowRight, Zap, FileText, Eye, Bell,
+  AlertTriangle, ArrowRight, Zap, FileText, Eye, Bell, Brain, TrendingDown,
+  TrendingUp, Shield, Activity, Sparkles, BarChart3, Target,
 } from 'lucide-react';
 import { format, differenceInDays, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -218,6 +220,8 @@ const Funding = () => {
   const [expandedRequest, setExpandedRequest] = useState<string | null>(null);
   const [requestHistory, setRequestHistory] = useState<Record<string, StatusHistoryEntry[]>>({});
   const [orders, setOrders] = useState<{ id: string; symbol: string; order_type: string; total_amount: number }[]>([]);
+  const [aiInsights, setAiInsights] = useState<any>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   // Form states
   const [showAccountDialog, setShowAccountDialog] = useState(false);
@@ -247,6 +251,21 @@ const Funding = () => {
   }, [user]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const fetchAIInsights = useCallback(async () => {
+    if (!user) return;
+    setAiLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('funding-ai', {});
+      if (error) throw error;
+      setAiInsights(data);
+    } catch (e: any) {
+      console.error('AI insights error:', e);
+      toast({ title: 'AI Analysis', description: 'Could not load AI insights', variant: 'destructive' });
+    } finally {
+      setAiLoading(false);
+    }
+  }, [user]);
 
   // Check for settlement alerts, stale requests, and mismatch on requests
   useEffect(() => {
@@ -489,6 +508,7 @@ const Funding = () => {
             <TabsTrigger value="initiate"><ArrowUpRight className="h-4 w-4 mr-1.5" /> Initiate Funding</TabsTrigger>
             <TabsTrigger value="history"><History className="h-4 w-4 mr-1.5" /> Workflow & History</TabsTrigger>
             <TabsTrigger value="ledger"><IndianRupee className="h-4 w-4 mr-1.5" /> Cash Ledger</TabsTrigger>
+            <TabsTrigger value="ai-intelligence" onClick={() => { if (!aiInsights && !aiLoading) fetchAIInsights(); }}><Brain className="h-4 w-4 mr-1.5" /> AI Intelligence</TabsTrigger>
           </TabsList>
 
           {/* ─── Accounts Tab ─── */}
@@ -713,6 +733,180 @@ const Funding = () => {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+          {/* ─── AI Intelligence Tab ─── */}
+          <TabsContent value="ai-intelligence">
+            <div className="space-y-6">
+              {aiLoading ? (
+                <Card><CardContent className="py-16 text-center"><RefreshCw className="h-8 w-8 animate-spin mx-auto text-primary mb-3" /><p className="text-muted-foreground">Running AI analysis on funding operations...</p></CardContent></Card>
+              ) : !aiInsights ? (
+                <Card><CardContent className="py-16 text-center"><Brain className="h-10 w-10 mx-auto text-muted-foreground mb-3" /><p className="text-muted-foreground mb-4">Click to analyze your funding operations with AI</p><Button onClick={fetchAIInsights}><Sparkles className="h-4 w-4 mr-1.5" /> Run AI Analysis</Button></CardContent></Card>
+              ) : (
+                <>
+                  {/* AI Summary Cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <Card><CardContent className="pt-4 pb-3 text-center"><Activity className="h-5 w-5 mx-auto text-primary mb-1" /><p className="text-xl font-bold">{aiInsights.summary?.total_active_requests || 0}</p><p className="text-xs text-muted-foreground">Active Requests</p></CardContent></Card>
+                    <Card className={cn(aiInsights.summary?.high_risk_count > 0 && 'border-destructive/50')}><CardContent className="pt-4 pb-3 text-center"><AlertTriangle className="h-5 w-5 mx-auto text-destructive mb-1" /><p className="text-xl font-bold">{aiInsights.summary?.high_risk_count || 0}</p><p className="text-xs text-muted-foreground">High Risk</p></CardContent></Card>
+                    <Card className={cn(aiInsights.summary?.shortfall_clients > 0 && 'border-amber-500/50')}><CardContent className="pt-4 pb-3 text-center"><TrendingDown className="h-5 w-5 mx-auto text-amber-500 mb-1" /><p className="text-xl font-bold">{aiInsights.summary?.shortfall_clients || 0}</p><p className="text-xs text-muted-foreground">Shortfall Clients</p></CardContent></Card>
+                    <Card><CardContent className="pt-4 pb-3 text-center"><IndianRupee className="h-5 w-5 mx-auto text-emerald-500 mb-1" /><p className="text-xl font-bold">{formatCurrency(aiInsights.summary?.total_pending_amount || 0)}</p><p className="text-xs text-muted-foreground">Pending Amount</p></CardContent></Card>
+                    <Card><CardContent className="pt-4 pb-3 text-center"><Target className="h-5 w-5 mx-auto text-blue-500 mb-1" /><p className="text-xl font-bold">{aiInsights.summary?.avg_completion_probability || 0}%</p><p className="text-xs text-muted-foreground">Avg Completion</p></CardContent></Card>
+                    <Card><CardContent className="pt-4 pb-3 text-center"><Shield className="h-5 w-5 mx-auto text-violet-500 mb-1" /><p className="text-xl font-bold">{aiInsights.summary?.large_movements_flagged || 0}</p><p className="text-xs text-muted-foreground">Large Movements</p></CardContent></Card>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Funding Risk Alerts */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-destructive" /> Funding Risk Alerts</CardTitle>
+                          <Badge variant="outline">{aiInsights.risk_alerts?.length || 0}</Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        {(!aiInsights.risk_alerts || aiInsights.risk_alerts.length === 0) ? (
+                          <p className="text-sm text-muted-foreground text-center py-4">No risk alerts — all clear ✅</p>
+                        ) : (
+                          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                            {aiInsights.risk_alerts.map((alert: any, i: number) => (
+                              <div key={i} className={cn('border rounded-lg p-3', alert.severity === 'critical' ? 'border-destructive/50 bg-destructive/5' : alert.severity === 'high' ? 'border-amber-500/50 bg-amber-500/5' : 'border-muted')}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <Badge variant={alert.severity === 'critical' ? 'destructive' : 'outline'} className="text-[10px]">{alert.severity}</Badge>
+                                      <Badge variant="secondary" className="text-[10px]">{alert.type?.replace(/_/g, ' ')}</Badge>
+                                    </div>
+                                    <p className="font-medium text-sm mt-1">{alert.title}</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">{alert.description}</p>
+                                    {alert.suggested_action && (
+                                      <p className="text-xs mt-1.5 flex items-center gap-1"><Sparkles className="h-3 w-3 text-primary" /><span className="font-medium">Action:</span> {alert.suggested_action}</p>
+                                    )}
+                                  </div>
+                                  {alert.score != null && (
+                                    <div className="text-right flex-shrink-0">
+                                      <p className={cn('text-lg font-bold', alert.score > 70 ? 'text-destructive' : alert.score > 50 ? 'text-amber-500' : 'text-muted-foreground')}>{alert.score}%</p>
+                                      <p className="text-[10px] text-muted-foreground">risk</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Settlement Risk Monitor */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-base flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" /> Settlement Risk Monitor</CardTitle>
+                          <Badge variant="outline">{aiInsights.settlement_risks?.length || 0}</Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        {(!aiInsights.settlement_risks || aiInsights.settlement_risks.length === 0) ? (
+                          <p className="text-sm text-muted-foreground text-center py-4">No active settlement risks</p>
+                        ) : (
+                          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                            {aiInsights.settlement_risks.map((sr: any, i: number) => (
+                              <div key={i} className={cn('border rounded-lg p-3', sr.risk_level === 'critical' ? 'border-destructive/50 bg-destructive/5' : sr.risk_level === 'high' ? 'border-amber-500/50 bg-amber-500/5' : 'border-muted')}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <div>
+                                    <p className="font-medium text-sm">{sr.client_name}</p>
+                                    <p className="text-xs text-muted-foreground">{sr.funding_type} • {formatCurrency(sr.amount)}</p>
+                                  </div>
+                                  <Badge variant={sr.risk_level === 'critical' ? 'destructive' : sr.risk_level === 'high' ? 'outline' : 'secondary'} className="text-[10px]">
+                                    {sr.days_remaining < 0 ? `${Math.abs(sr.days_remaining)}d overdue` : sr.days_remaining === 0 ? 'Due today' : `${sr.days_remaining}d left`}
+                                  </Badge>
+                                </div>
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-xs"><span>Completion probability</span><span className="font-medium">{sr.completion_probability}%</span></div>
+                                  <Progress value={sr.completion_probability} className="h-1.5" />
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1"><Sparkles className="h-3 w-3 text-primary" /> {sr.recommendation}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Cash Flow Forecast */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2"><TrendingUp className="h-4 w-4 text-emerald-500" /> Cash Flow Forecast</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {(!aiInsights.cash_flow_forecasts || aiInsights.cash_flow_forecasts.length === 0) ? (
+                          <p className="text-sm text-muted-foreground text-center py-4">No cash balance data to forecast</p>
+                        ) : (
+                          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                            {aiInsights.cash_flow_forecasts.map((cf: any, i: number) => (
+                              <div key={i} className={cn('border rounded-lg p-3', cf.shortfall ? 'border-destructive/50 bg-destructive/5' : 'border-muted')}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <p className="font-medium text-sm">{cf.client_name}</p>
+                                  {cf.shortfall && <Badge variant="destructive" className="text-[10px]">Shortfall</Badge>}
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                                  <div><span className="text-muted-foreground">Available:</span> <span className="font-medium text-emerald-600">{formatCurrency(cf.current_available)}</span></div>
+                                  <div><span className="text-muted-foreground">Pending:</span> <span className="font-medium text-amber-600">{formatCurrency(cf.current_pending)}</span></div>
+                                  <div><span className="text-muted-foreground">Inflow:</span> <span className="font-medium">{formatCurrency(cf.projected_inflow)}</span></div>
+                                  <div><span className="text-muted-foreground">Outflow:</span> <span className="font-medium">{formatCurrency(cf.projected_outflow)}</span></div>
+                                </div>
+                                <div className="flex items-center justify-between text-xs border-t pt-1.5 mt-1.5">
+                                  <span className="text-muted-foreground">Projected Balance:</span>
+                                  <span className={cn('font-bold', cf.projected_balance < 0 ? 'text-destructive' : 'text-emerald-600')}>{formatCurrency(cf.projected_balance)}</span>
+                                </div>
+                                {cf.days_until_shortfall != null && (
+                                  <p className="text-xs text-amber-600 mt-1">⚠️ Cash may deplete in ~{cf.days_until_shortfall} days</p>
+                                )}
+                                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Sparkles className="h-3 w-3 text-primary" /> {cf.recommendation}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Smart Funding Suggestions */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> Smart Funding Suggestions</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {(!aiInsights.smart_suggestions || aiInsights.smart_suggestions.length === 0) ? (
+                          <p className="text-sm text-muted-foreground text-center py-4">No funding suggestions — all trades are funded ✅</p>
+                        ) : (
+                          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                            {aiInsights.smart_suggestions.map((sg: any, i: number) => (
+                              <div key={i} className="border rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-1">
+                                  <p className="font-medium text-sm">{sg.client_name}</p>
+                                  <Badge variant={sg.urgency === 'Urgent' ? 'destructive' : sg.urgency === 'High' ? 'outline' : 'secondary'} className="text-[10px]">{sg.urgency}</Badge>
+                                </div>
+                                <div className="flex items-center gap-2 mb-1.5">
+                                  <Badge className="text-xs">{sg.recommended_method}</Badge>
+                                  <span className="text-xs text-muted-foreground">Settlement: {sg.estimated_settlement}</span>
+                                  <Badge variant="outline" className="text-[10px]">Cost: {sg.cost_indicator}</Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground">{sg.reason}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Refresh */}
+                  <div className="flex justify-center">
+                    <Button variant="outline" size="sm" onClick={fetchAIInsights} disabled={aiLoading}>
+                      <RefreshCw className={cn('h-4 w-4 mr-1.5', aiLoading && 'animate-spin')} /> Re-run AI Analysis
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       </div>

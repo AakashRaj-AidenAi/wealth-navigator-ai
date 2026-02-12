@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.ai-growth-engine]
 verify_jwt = false
+
+[functions.funding-ai]
+verify_jwt = false
