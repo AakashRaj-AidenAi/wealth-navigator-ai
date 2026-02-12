@@ -31,7 +31,8 @@ import {
   Landmark,
   Sparkles,
   Brain,
-  ShieldCheck
+  ShieldCheck,
+  Activity
 } from 'lucide-react';
 
 import { ClientOverviewTab } from '@/components/clients/ClientOverviewTab';
@@ -49,7 +50,8 @@ import { EditClientModal } from '@/components/modals/EditClientModal';
 import { QuickNoteModal } from '@/components/clients/QuickNoteModal';
 import { AIDraftMessageModal, MeetingSummaryModal } from '@/components/ai-growth-engine';
 import { ClientRiskProfileTab } from '@/components/risk-profiling';
-
+import { useEngagementScores } from '@/hooks/useEngagementScores';
+import { EngagementBadge } from '@/components/clients/EngagementBadge';
 interface Client {
   id: string;
   client_name: string;
@@ -109,7 +111,8 @@ const ClientProfile = () => {
   const [aiDraftOpen, setAiDraftOpen] = useState(false);
   const [meetingSummaryOpen, setMeetingSummaryOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
-
+  const { getScoreForClient, calculateAndUpsert } = useEngagementScores();
+  const engagementData = id ? getScoreForClient(id) : undefined;
   const fetchClient = async () => {
     if (!id) return;
     
@@ -225,11 +228,21 @@ const ClientProfile = () => {
                         {tag.tag}
                       </Badge>
                     ))}
+                    <EngagementBadge score={engagementData?.engagement_score} size="md" />
                   </div>
                 </div>
                 <div className="ml-auto flex items-center gap-2 flex-wrap">
                   {canEdit && (
                     <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => client && calculateAndUpsert(client.id)}
+                      >
+                        <Activity className="h-4 w-4" />
+                        Recalculate Score
+                      </Button>
                       <Button 
                         variant="outline" 
                         size="sm" 
