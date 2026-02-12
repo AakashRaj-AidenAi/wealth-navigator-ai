@@ -17,7 +17,7 @@ import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import {
   Briefcase, Plus, RefreshCw, Trash2, Edit, Eye, Layers, ArrowLeftRight,
-  TrendingUp, TrendingDown, Building2, DollarSign, Package, ClipboardList, LayoutDashboard, Calculator, Activity, Scale,
+  TrendingUp, TrendingDown, Building2, DollarSign, Package, ClipboardList, LayoutDashboard, Calculator, Activity, Scale, BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TotalAssetView } from '@/components/portfolio-admin/TotalAssetView';
@@ -25,6 +25,7 @@ import { CostBasisView } from '@/components/portfolio-admin/CostBasisView';
 import { AccountingPerformanceView } from '@/components/portfolio-admin/AccountingPerformanceView';
 import { AdvancedPositionsView } from '@/components/portfolio-admin/AdvancedPositionsView';
 import { RebalancingView } from '@/components/portfolio-admin/RebalancingView';
+import { ModelPortfolioView } from '@/components/portfolio-admin/ModelPortfolioView';
 
 // ─── Types ───
 interface Portfolio {
@@ -373,6 +374,7 @@ const PortfolioAdmin = () => {
             <TabsTrigger value="cost-basis" className="gap-1"><Calculator className="h-4 w-4" /> Cost Basis</TabsTrigger>
             <TabsTrigger value="accounting" className="gap-1"><Activity className="h-4 w-4" /> Accounting & Performance</TabsTrigger>
             <TabsTrigger value="rebalancing" className="gap-1"><Scale className="h-4 w-4" /> Rebalancing</TabsTrigger>
+            <TabsTrigger value="models" className="gap-1"><BookOpen className="h-4 w-4" /> Model Portfolios</TabsTrigger>
           </TabsList>
 
           {/* ─── TOTAL ASSET VIEW TAB ─── */}
@@ -602,6 +604,15 @@ const PortfolioAdmin = () => {
           {/* ─── REBALANCING TAB ─── */}
           <TabsContent value="rebalancing" className="space-y-4">
             <RebalancingView
+              portfolios={portfolios}
+              positions={positions}
+              selectedPortfolioId={selectedPortfolioId}
+            />
+          </TabsContent>
+
+          {/* ─── MODEL PORTFOLIOS TAB ─── */}
+          <TabsContent value="models" className="space-y-4">
+            <ModelPortfolioView
               portfolios={portfolios}
               positions={positions}
               selectedPortfolioId={selectedPortfolioId}
