@@ -43,6 +43,8 @@ import { OnboardingWizard } from '@/components/onboarding';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
+import { useEngagementScores } from '@/hooks/useEngagementScores';
+import { EngagementBadge } from '@/components/clients/EngagementBadge';
 
 interface Client {
   id: string;
@@ -90,7 +92,9 @@ const Clients = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [riskFilter, setRiskFilter] = useState<string>('all');
   const [tagFilter, setTagFilter] = useState<string>('all');
+  const [engagementFilter, setEngagementFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const { scores, getScoreForClient, calculateAll } = useEngagementScores();
   const [addClientOpen, setAddClientOpen] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
   const [clientTags, setClientTags] = useState<ClientTag[]>([]);
@@ -133,7 +137,20 @@ const Clients = () => {
     const matchesStatus = statusFilter === 'all' || client.status === statusFilter;
     const matchesRisk = riskFilter === 'all' || client.risk_profile === riskFilter;
     const matchesTag = tagFilter === 'all' || getClientTags(client.id).some(t => t.tag === tagFilter);
-    return matchesSearch && matchesStatus && matchesRisk && matchesTag;
+    const score = getScoreForClient(client.id);
+    const matchesEngagement = engagementFilter === 'all' || 
+      (engagementFilter === 'high' && score && score.engagement_score >= 75) ||
+      (engagementFilter === 'medium' && score && score.engagement_score >= 40 && score.engagement_score < 75) ||
+      (engagementFilter === 'low' && score && score.engagement_score < 40) ||
+      (engagementFilter === 'unscored' && !score);
+    return matchesSearch && matchesStatus && matchesRisk && matchesTag && matchesEngagement;
+  }).sort((a, b) => {
+    if (engagementFilter !== 'all') {
+      const scoreA = getScoreForClient(a.id)?.engagement_score ?? -1;
+      const scoreB = getScoreForClient(b.id)?.engagement_score ?? -1;
+      return scoreB - scoreA;
+    }
+    return 0;
   });
 
   const canAddClient = role === 'wealth_advisor';
@@ -209,6 +226,18 @@ const Clients = () => {
                 <SelectItem value="nri">NRI</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={engagementFilter} onValueChange={setEngagementFilter}>
+              <SelectTrigger className="w-40 bg-secondary/50">
+                <SelectValue placeholder="Engagement" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Engagement</SelectItem>
+                <SelectItem value="high">High (75–100)</SelectItem>
+                <SelectItem value="medium">Medium (40–74)</SelectItem>
+                <SelectItem value="low">Low (0–39)</SelectItem>
+                <SelectItem value="unscored">Unscored</SelectItem>
+              </SelectContent>
+            </Select>
             <div className="flex items-center border rounded-lg bg-secondary/50">
               <Button 
                 variant="ghost" 
@@ -261,6 +290,7 @@ const Clients = () => {
               <TableHeader>
                 <TableRow className="bg-muted/30">
                   <TableHead>Client</TableHead>
+                  <TableHead>Engagement</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Tags</TableHead>
                   <TableHead className="text-right">AUM</TableHead>
@@ -288,6 +318,9 @@ const Clients = () => {
                             <p className="text-xs text-muted-foreground">{client.email || 'No email'}</p>
                           </div>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <EngagementBadge score={getScoreForClient(client.id)?.engagement_score} />
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={cn('capitalize', statusColors[client.status])}>
@@ -375,6 +408,10 @@ const Clients = () => {
                   )}
 
                   <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Engagement</span>
+                      <EngagementBadge score={getScoreForClient(client.id)?.engagement_score} />
+                    </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Total Assets</span>
                       <span className="font-semibold tabular-nums">{formatCurrency(Number(client.total_assets), true)}</span>

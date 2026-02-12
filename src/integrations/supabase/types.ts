@@ -586,6 +586,65 @@ export type Database = {
           },
         ]
       }
+      client_engagement_scores: {
+        Row: {
+          advisor_id: string
+          calculated_at: string
+          campaign_response_rate: number | null
+          client_id: string
+          created_at: string
+          days_since_last_interaction: number | null
+          engagement_level: string | null
+          engagement_score: number
+          id: string
+          meetings_last_90_days: number | null
+          portfolio_activity_frequency: number | null
+          revenue_contribution: number | null
+          task_completion_rate: number | null
+          updated_at: string
+        }
+        Insert: {
+          advisor_id: string
+          calculated_at?: string
+          campaign_response_rate?: number | null
+          client_id: string
+          created_at?: string
+          days_since_last_interaction?: number | null
+          engagement_level?: string | null
+          engagement_score?: number
+          id?: string
+          meetings_last_90_days?: number | null
+          portfolio_activity_frequency?: number | null
+          revenue_contribution?: number | null
+          task_completion_rate?: number | null
+          updated_at?: string
+        }
+        Update: {
+          advisor_id?: string
+          calculated_at?: string
+          campaign_response_rate?: number | null
+          client_id?: string
+          created_at?: string
+          days_since_last_interaction?: number | null
+          engagement_level?: string | null
+          engagement_score?: number
+          id?: string
+          meetings_last_90_days?: number | null
+          portfolio_activity_frequency?: number | null
+          revenue_contribution?: number | null
+          task_completion_rate?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_engagement_scores_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_family_members: {
         Row: {
           client_id: string
