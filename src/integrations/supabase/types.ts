@@ -387,6 +387,44 @@ export type Database = {
           },
         ]
       }
+      cash_balances: {
+        Row: {
+          advisor_id: string
+          available_cash: number
+          client_id: string
+          created_at: string
+          id: string
+          last_updated: string
+          pending_cash: number
+        }
+        Insert: {
+          advisor_id: string
+          available_cash?: number
+          client_id: string
+          created_at?: string
+          id?: string
+          last_updated?: string
+          pending_cash?: number
+        }
+        Update: {
+          advisor_id?: string
+          available_cash?: number
+          client_id?: string
+          created_at?: string
+          id?: string
+          last_updated?: string
+          pending_cash?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_balances_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       churn_predictions: {
         Row: {
           advisor_id: string
@@ -1475,6 +1513,148 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      funding_accounts: {
+        Row: {
+          account_number: string
+          account_type: string
+          advisor_id: string
+          bank_name: string
+          client_id: string
+          created_at: string
+          default_account: boolean
+          id: string
+          updated_at: string
+          verification_status: string
+        }
+        Insert: {
+          account_number: string
+          account_type?: string
+          advisor_id: string
+          bank_name: string
+          client_id: string
+          created_at?: string
+          default_account?: boolean
+          id?: string
+          updated_at?: string
+          verification_status?: string
+        }
+        Update: {
+          account_number?: string
+          account_type?: string
+          advisor_id?: string
+          bank_name?: string
+          client_id?: string
+          created_at?: string
+          default_account?: boolean
+          id?: string
+          updated_at?: string
+          verification_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funding_accounts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funding_requests: {
+        Row: {
+          amount: number
+          client_id: string
+          created_at: string
+          funding_account_id: string | null
+          funding_type: string
+          id: string
+          initiated_by: string
+          notes: string | null
+          status: string
+          trade_reference: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          client_id: string
+          created_at?: string
+          funding_account_id?: string | null
+          funding_type?: string
+          id?: string
+          initiated_by: string
+          notes?: string | null
+          status?: string
+          trade_reference?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          client_id?: string
+          created_at?: string
+          funding_account_id?: string | null
+          funding_type?: string
+          id?: string
+          initiated_by?: string
+          notes?: string | null
+          status?: string
+          trade_reference?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funding_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_requests_funding_account_id_fkey"
+            columns: ["funding_account_id"]
+            isOneToOne: false
+            referencedRelation: "funding_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funding_transactions: {
+        Row: {
+          confirmation_status: string
+          created_at: string
+          external_reference: string | null
+          funding_request_id: string
+          id: string
+          settlement_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          confirmation_status?: string
+          created_at?: string
+          external_reference?: string | null
+          funding_request_id: string
+          id?: string
+          settlement_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          confirmation_status?: string
+          created_at?: string
+          external_reference?: string | null
+          funding_request_id?: string
+          id?: string
+          settlement_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funding_transactions_funding_request_id_fkey"
+            columns: ["funding_request_id"]
+            isOneToOne: false
+            referencedRelation: "funding_requests"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       goals: {
         Row: {
