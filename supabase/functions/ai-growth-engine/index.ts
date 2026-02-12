@@ -803,13 +803,16 @@ async function handleDraftMessage(
     });
   }
 
-  // Fetch client data
-  const { data: client } = await supabase
-    .from('clients')
-    .select('*')
-    .eq('id', clientId)
-    .single();
+  // Fetch client data with enrichment
+  const [clientRes, aumRes, goalsRes, meetingsRes, ordersRes] = await Promise.all([
+    supabase.from('clients').select('*').eq('id', clientId).single(),
+    supabase.from('client_aum').select('*').eq('client_id', clientId).order('last_updated', { ascending: false }).limit(1),
+    supabase.from('client_life_goals').select('*').eq('client_id', clientId).limit(5),
+    supabase.from('ai_meeting_summaries').select('summary, key_discussion_points, created_at').eq('client_id', clientId).order('created_at', { ascending: false }).limit(1),
+    supabase.from('orders').select('*').eq('client_id', clientId).order('created_at', { ascending: false }).limit(5),
+  ]);
 
+  const client = clientRes.data;
   if (!client) {
     return new Response(JSON.stringify({ error: 'Client not found' }), {
       status: 404,
@@ -817,12 +820,42 @@ async function handleDraftMessage(
     });
   }
 
+  const aum = aumRes.data?.[0];
+  const goals = goalsRes.data || [];
+  const lastMeeting = meetingsRes.data?.[0];
+  const recentOrders = ordersRes.data || [];
+
+  // Build personalization context
+  const portfolioValue = aum?.current_aum || client.total_assets || 0;
+  const equityPct = aum ? Math.round((aum.equity_aum || 0) / (aum.current_aum || 1) * 100) : null;
+  const debtPct = aum ? Math.round((aum.debt_aum || 0) / (aum.current_aum || 1) * 100) : null;
+  const riskProfile = client.risk_profile || 'moderate';
+  const goalSummary = goals.length > 0
+    ? goals.map((g: any) => `${g.name}: ₹${formatCurrency(g.target_amount || 0)}`).join(', ')
+    : 'No active goals';
+  const meetingSummary = lastMeeting?.summary || 'No recent meetings';
+  const meetingDate = lastMeeting?.created_at ? new Date(lastMeeting.created_at).toLocaleDateString() : null;
+
+  const personalization = `
+CLIENT PROFILE:
+- Name: ${client.client_name}
+- Portfolio Value: ₹${formatCurrency(portfolioValue)}
+${equityPct !== null ? `- Allocation: Equity ${equityPct}%, Debt ${debtPct}%` : ''}
+- Risk Profile: ${riskProfile}
+- Goals: ${goalSummary}
+${meetingDate ? `- Last Meeting (${meetingDate}): ${meetingSummary}` : '- No recent meetings'}
+${recentOrders.length > 0 ? `- Recent Activity: ${recentOrders.length} order(s) in pipeline` : '- No recent orders'}
+`;
+
   const messageTypes: Record<string, string> = {
-    birthday: `Write a warm, professional birthday greeting for ${client.client_name}.`,
-    review: `Write a brief email to ${client.client_name} requesting a portfolio review meeting. Their current portfolio value is ₹${formatCurrency(client.total_assets || 0)}.`,
-    dividend: `Write an email to ${client.client_name} about a recent dividend credit${context.data?.amount ? ` of ₹${context.data.amount}` : ''}. Suggest reinvestment options.`,
-    kyc: `Write a polite reminder to ${client.client_name} about their upcoming KYC renewal.`,
-    general: `Write a brief check-in email to ${client.client_name} asking how they're doing and if they have any questions.`
+    portfolio_update: `Write a portfolio update email for ${client.client_name}. Summarize their current portfolio performance, allocation, and any recommended adjustments based on their ${riskProfile} risk profile.`,
+    follow_up: `Write a follow-up email to ${client.client_name} referencing their last meeting${meetingDate ? ` on ${meetingDate}` : ''}. Address key discussion points and confirm next steps.`,
+    review_invite: `Write an email inviting ${client.client_name} for a comprehensive portfolio review meeting. Highlight their current portfolio value and any goals that need attention.`,
+    upsell: `Write a tactful email to ${client.client_name} suggesting additional investment opportunities aligned with their ${riskProfile} risk profile and current portfolio of ₹${formatCurrency(portfolioValue)}. Reference their goals if relevant.`,
+    birthday: `Write a warm, professional birthday greeting for ${client.client_name}. Keep it personal and brief.`,
+    general: `Write a brief check-in email to ${client.client_name} asking how they're doing and if they have any questions about their portfolio.`,
+    kyc: `Write a polite reminder to ${client.client_name} about their upcoming KYC renewal. Make it urgent but professional.`,
+    dividend: `Write an email to ${client.client_name} about a recent dividend credit. Suggest reinvestment options based on their ${riskProfile} profile.`,
   };
 
   const prompt = messageTypes[context.type] || messageTypes.general;
@@ -839,7 +872,9 @@ async function handleDraftMessage(
         messages: [
           { 
             role: 'system', 
-            content: 'You are a professional wealth advisor assistant. Write concise, warm, and professional messages. Keep emails under 150 words. Include a clear subject line at the start.' 
+            content: `You are a professional wealth advisor assistant drafting personalized client communications. Use the client data provided to make messages specific and relevant. Keep emails under 200 words. Always start with a clear "Subject:" line followed by the email body. Be warm but professional.
+
+${personalization}` 
           },
           { role: 'user', content: prompt }
         ],
@@ -854,13 +889,28 @@ async function handleDraftMessage(
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ error: 'AI credits exhausted. Please add funds.' }), {
+          status: 402,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       throw new Error('AI generation failed');
     }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || '';
 
-    return new Response(JSON.stringify({ draft: content }), {
+    return new Response(JSON.stringify({ 
+      draft: content,
+      personalization_used: {
+        portfolio_value: portfolioValue,
+        risk_profile: riskProfile,
+        goals_count: goals.length,
+        has_meeting_context: !!lastMeeting,
+        recent_orders: recentOrders.length,
+      }
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e) {
