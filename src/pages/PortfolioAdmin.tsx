@@ -17,7 +17,7 @@ import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import {
   Briefcase, Plus, RefreshCw, Trash2, Edit, Eye, Layers, ArrowLeftRight,
-  TrendingUp, TrendingDown, Building2, DollarSign, Package, ClipboardList, LayoutDashboard, Calculator, Activity, Scale, BookOpen,
+  TrendingUp, TrendingDown, Building2, DollarSign, Package, ClipboardList, LayoutDashboard, Calculator, Activity, Scale, BookOpen, Brain,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TotalAssetView } from '@/components/portfolio-admin/TotalAssetView';
@@ -26,6 +26,7 @@ import { AccountingPerformanceView } from '@/components/portfolio-admin/Accounti
 import { AdvancedPositionsView } from '@/components/portfolio-admin/AdvancedPositionsView';
 import { RebalancingView } from '@/components/portfolio-admin/RebalancingView';
 import { ModelPortfolioView } from '@/components/portfolio-admin/ModelPortfolioView';
+import { PortfolioAIInsightsPanel } from '@/components/portfolio-admin/PortfolioAIInsightsPanel';
 
 // ─── Types ───
 interface Portfolio {
@@ -375,6 +376,7 @@ const PortfolioAdmin = () => {
             <TabsTrigger value="accounting" className="gap-1"><Activity className="h-4 w-4" /> Accounting & Performance</TabsTrigger>
             <TabsTrigger value="rebalancing" className="gap-1"><Scale className="h-4 w-4" /> Rebalancing</TabsTrigger>
             <TabsTrigger value="models" className="gap-1"><BookOpen className="h-4 w-4" /> Model Portfolios</TabsTrigger>
+            <TabsTrigger value="ai-insights" className="gap-1"><Brain className="h-4 w-4" /> AI Insights</TabsTrigger>
           </TabsList>
 
           {/* ─── TOTAL ASSET VIEW TAB ─── */}
@@ -617,6 +619,11 @@ const PortfolioAdmin = () => {
               positions={positions}
               selectedPortfolioId={selectedPortfolioId}
             />
+          </TabsContent>
+
+          {/* ─── AI INSIGHTS TAB ─── */}
+          <TabsContent value="ai-insights" className="space-y-4">
+            <PortfolioAIInsightsPanel />
           </TabsContent>
         </Tabs>
 
