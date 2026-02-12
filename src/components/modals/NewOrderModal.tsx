@@ -5,11 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, Settings2 } from 'lucide-react';
+import { formatCurrency } from '@/lib/currency';
+import { Loader2, Settings2, AlertTriangle, Wallet, ArrowUpRight } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface Client {
@@ -17,20 +18,28 @@ interface Client {
   client_name: string;
 }
 
+interface CashBalance {
+  available_cash: number;
+  pending_cash: number;
+}
+
 interface NewOrderModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  onInitiateFunding?: (clientId: string, amount: number) => void;
 }
 
 type ExecutionType = 'market' | 'limit' | 'fill_or_kill' | 'good_till_cancel';
 
-export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalProps) => {
+export const NewOrderModal = ({ open, onOpenChange, onSuccess, onInitiateFunding }: NewOrderModalProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [cashBalance, setCashBalance] = useState<CashBalance | null>(null);
+  const [loadingBalance, setLoadingBalance] = useState(false);
   
   const [selectedClient, setSelectedClient] = useState('');
   const [orderType, setOrderType] = useState<'buy' | 'sell'>('buy');
@@ -39,7 +48,6 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
   const [price, setPrice] = useState('');
   const [notes, setNotes] = useState('');
   
-  // Advanced order settings
   const [executionType, setExecutionType] = useState<ExecutionType>('market');
   const [limitPrice, setLimitPrice] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
@@ -50,45 +58,60 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
     }
   }, [open]);
 
+  // Fetch cash balance when client changes
+  useEffect(() => {
+    if (selectedClient && user) {
+      fetchCashBalance(selectedClient);
+    } else {
+      setCashBalance(null);
+    }
+  }, [selectedClient, user]);
+
   const fetchClients = async () => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('clients')
       .select('id, client_name')
       .order('client_name');
-    
-    if (data) {
-      setClients(data);
-    }
+    if (data) setClients(data);
   };
+
+  const fetchCashBalance = async (clientId: string) => {
+    setLoadingBalance(true);
+    const { data } = await supabase
+      .from('cash_balances')
+      .select('available_cash, pending_cash')
+      .eq('client_id', clientId)
+      .maybeSingle();
+    setCashBalance(data ? { available_cash: Number(data.available_cash), pending_cash: Number(data.pending_cash) } : { available_cash: 0, pending_cash: 0 });
+    setLoadingBalance(false);
+  };
+
+  const estimatedTotal = ((parseFloat(limitPrice || price) || 0) * (parseFloat(quantity) || 0));
+  const availableCash = cashBalance?.available_cash ?? 0;
+  const insufficientFunds = orderType === 'buy' && estimatedTotal > 0 && estimatedTotal > availableCash;
+  const shortfall = estimatedTotal - availableCash;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!user) {
-      toast({
-        title: 'Error',
-        description: 'You must be logged in to create an order.',
-        variant: 'destructive'
-      });
+      toast({ title: 'Error', description: 'You must be logged in to create an order.', variant: 'destructive' });
       return;
     }
 
     if (!selectedClient || !symbol.trim() || !quantity) {
-      toast({
-        title: 'Validation Error',
-        description: 'Please fill in all required fields.',
-        variant: 'destructive'
-      });
+      toast({ title: 'Validation Error', description: 'Please fill in all required fields.', variant: 'destructive' });
       return;
     }
 
-    // Validate limit price for limit orders
     if ((executionType === 'limit' || executionType === 'good_till_cancel') && !limitPrice) {
-      toast({
-        title: 'Validation Error',
-        description: 'Limit price is required for limit and GTC orders.',
-        variant: 'destructive'
-      });
+      toast({ title: 'Validation Error', description: 'Limit price is required for limit and GTC orders.', variant: 'destructive' });
+      return;
+    }
+
+    // Prevent buy orders exceeding available cash
+    if (insufficientFunds) {
+      toast({ title: 'Insufficient Funds', description: `Client needs ${formatCurrency(shortfall)} more to place this order. Initiate funding first.`, variant: 'destructive' });
       return;
     }
 
@@ -114,16 +137,21 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
       });
 
     if (error) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive'
-      });
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
-      const executionLabel = getExecutionTypeLabel(executionType);
+      // Reserve cash for buy orders (move from available to pending)
+      if (orderType === 'buy' && totalAmount && totalAmount > 0) {
+        const newAvailable = availableCash - totalAmount;
+        const newPending = (cashBalance?.pending_cash ?? 0) + totalAmount;
+        await supabase
+          .from('cash_balances')
+          .update({ available_cash: newAvailable, pending_cash: newPending, last_updated: new Date().toISOString() })
+          .eq('client_id', selectedClient);
+      }
+
       toast({
         title: 'Order Created',
-        description: `${orderType.toUpperCase()} ${executionLabel} order for ${symbol.toUpperCase()} has been placed.`
+        description: `${orderType.toUpperCase()} ${getExecutionTypeLabel(executionType)} order for ${symbol.toUpperCase()} placed.${orderType === 'buy' && totalAmount ? ` ${formatCurrency(totalAmount)} reserved.` : ''}`
       });
       resetForm();
       onOpenChange(false);
@@ -154,6 +182,7 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
     setLimitPrice('');
     setExpiresAt('');
     setShowAdvanced(false);
+    setCashBalance(null);
   };
 
   const showLimitPrice = executionType === 'limit' || executionType === 'good_till_cancel';
@@ -181,6 +210,23 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
               </SelectContent>
             </Select>
           </div>
+
+          {/* Cash Balance Indicator */}
+          {selectedClient && (
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border">
+              <div className="flex items-center gap-2">
+                <Wallet className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Available Cash</span>
+              </div>
+              {loadingBalance ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              ) : (
+                <span className={`text-sm font-semibold ${availableCash > 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+                  {formatCurrency(availableCash)}
+                </span>
+              )}
+            </div>
+          )}
           
           <div className="space-y-2">
             <Label>Order Type *</Label>
@@ -263,30 +309,10 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="market">
-                      <div className="flex flex-col">
-                        <span>Market Order</span>
-                        <span className="text-xs text-muted-foreground">Execute immediately at best price</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="limit">
-                      <div className="flex flex-col">
-                        <span>Limit Order</span>
-                        <span className="text-xs text-muted-foreground">Execute only at specified price or better</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="fill_or_kill">
-                      <div className="flex flex-col">
-                        <span>Fill or Kill (FOK)</span>
-                        <span className="text-xs text-muted-foreground">Execute entire order immediately or cancel</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="good_till_cancel">
-                      <div className="flex flex-col">
-                        <span>Good Till Cancel (GTC)</span>
-                        <span className="text-xs text-muted-foreground">Order remains active until filled or cancelled</span>
-                      </div>
-                    </SelectItem>
+                    <SelectItem value="market">Market Order</SelectItem>
+                    <SelectItem value="limit">Limit Order</SelectItem>
+                    <SelectItem value="fill_or_kill">Fill or Kill (FOK)</SelectItem>
+                    <SelectItem value="good_till_cancel">Good Till Cancel (GTC)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -304,12 +330,6 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
                     step="0.01"
                     required={showLimitPrice}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    {orderType === 'buy' 
-                      ? 'Order will execute when price falls to or below this level'
-                      : 'Order will execute when price rises to or above this level'
-                    }
-                  </p>
                 </div>
               )}
 
@@ -322,20 +342,17 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
                     value={expiresAt}
                     onChange={(e) => setExpiresAt(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Leave empty for no expiration (order remains active until filled or manually cancelled)
-                  </p>
                 </div>
               )}
             </CollapsibleContent>
           </Collapsible>
 
-          {/* Estimated Total */}
+          {/* Estimated Total with Cash Check */}
           {((price && quantity) || (limitPrice && quantity)) && (
-            <div className="p-3 rounded-lg bg-secondary/30">
+            <div className={`p-3 rounded-lg ${insufficientFunds ? 'bg-destructive/10 border border-destructive/30' : 'bg-secondary/30'}`}>
               <p className="text-sm text-muted-foreground">Estimated Total</p>
               <p className="text-xl font-semibold">
-                ${((parseFloat(limitPrice || price) || 0) * (parseFloat(quantity) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {formatCurrency(estimatedTotal)}
               </p>
               {executionType !== 'market' && (
                 <p className="text-xs text-muted-foreground mt-1">
@@ -343,6 +360,33 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
                 </p>
               )}
             </div>
+          )}
+
+          {/* Insufficient Funds Warning */}
+          {insufficientFunds && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription className="flex items-center justify-between">
+                <span>
+                  Insufficient funds. Short by <strong>{formatCurrency(shortfall)}</strong>.
+                </span>
+                {onInitiateFunding && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="ml-2 border-destructive/50 text-destructive hover:bg-destructive/10"
+                    onClick={() => {
+                      onOpenChange(false);
+                      onInitiateFunding(selectedClient, shortfall);
+                    }}
+                  >
+                    <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
+                    Initiate Funding
+                  </Button>
+                )}
+              </AlertDescription>
+            </Alert>
           )}
           
           <div className="space-y-2">
@@ -360,7 +404,11 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess }: NewOrderModalPr
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-gradient-gold hover:opacity-90" disabled={loading}>
+            <Button
+              type="submit"
+              className="bg-gradient-gold hover:opacity-90"
+              disabled={loading || (insufficientFunds && orderType === 'buy')}
+            >
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

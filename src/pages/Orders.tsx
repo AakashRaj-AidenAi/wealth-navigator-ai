@@ -1,32 +1,27 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, Filter, Clock, CheckCircle2, XCircle, Check, X, TrendingUp } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Plus, Search, Filter, Clock, CheckCircle2, XCircle, Check, X, TrendingUp,
+  Wallet, AlertTriangle, ArrowUpRight, IndianRupee, CalendarClock,
+} from 'lucide-react';
 import { NewOrderModal } from '@/components/modals/NewOrderModal';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
 import { useToast } from '@/hooks/use-toast';
+import { format, differenceInDays } from 'date-fns';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
 interface Order {
@@ -62,8 +57,9 @@ const executionTypeLabels: Record<string, string> = {
 };
 
 const Orders = () => {
-  const { role } = useAuth();
+  const { user, role } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [newOrderOpen, setNewOrderOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,27 +71,50 @@ const Orders = () => {
     orderId: string;
     action: 'execute' | 'cancel';
     symbol: string;
+    clientId: string;
+    orderType: string;
+    totalAmount: number | null;
   } | null>(null);
+
+  // Funding dashboard state
+  const [totalAvailableCash, setTotalAvailableCash] = useState(0);
+  const [pendingFundingAmount, setPendingFundingAmount] = useState(0);
+  const [upcomingSettlements, setUpcomingSettlements] = useState(0);
+  const [failedFundingCount, setFailedFundingCount] = useState(0);
 
   const fetchOrders = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('orders')
-      .select(`
-        *,
-        clients (client_name)
-      `)
+      .select('*, clients (client_name)')
       .order('created_at', { ascending: false });
-    
-    if (data) {
-      setOrders(data as Order[]);
-    }
+    if (data) setOrders(data as Order[]);
     setLoading(false);
+  };
+
+  const fetchFundingDashboard = async () => {
+    if (!user) return;
+    const [balancesRes, pendingRes, settlementsRes, failedRes] = await Promise.all([
+      supabase.from('cash_balances').select('available_cash').eq('advisor_id', user.id),
+      supabase.from('funding_requests').select('amount').eq('initiated_by', user.id).not('workflow_stage', 'in', '("completed","failed")'),
+      supabase.from('funding_requests').select('id, settlement_date').eq('initiated_by', user.id).not('workflow_stage', 'in', '("completed","failed")').not('settlement_date', 'is', null),
+      supabase.from('funding_requests').select('id').eq('initiated_by', user.id).eq('workflow_stage', 'failed'),
+    ]);
+    setTotalAvailableCash((balancesRes.data || []).reduce((s, b) => s + Number(b.available_cash), 0));
+    setPendingFundingAmount((pendingRes.data || []).reduce((s, r) => s + Number(r.amount), 0));
+    const upcoming = (settlementsRes.data || []).filter(r => {
+      if (!r.settlement_date) return false;
+      const days = differenceInDays(new Date(r.settlement_date), new Date());
+      return days >= 0 && days <= 3;
+    });
+    setUpcomingSettlements(upcoming.length);
+    setFailedFundingCount((failedRes.data || []).length);
   };
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+    fetchFundingDashboard();
+  }, [user]);
 
   const canCreateOrder = role === 'wealth_advisor';
   const canApproveOrders = role === 'compliance_officer';
@@ -113,21 +132,49 @@ const Orders = () => {
       .eq('id', orderId);
 
     if (error) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive'
-      });
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
+      // On execution: deduct pending_cash (already reserved)
+      // On cancellation: release reserved cash back to available
+      if (confirmDialog && confirmDialog.orderType === 'buy' && confirmDialog.totalAmount && confirmDialog.totalAmount > 0) {
+        const { data: bal } = await supabase
+          .from('cash_balances')
+          .select('id, available_cash, pending_cash')
+          .eq('client_id', confirmDialog.clientId)
+          .maybeSingle();
+
+        if (bal) {
+          if (action === 'execute') {
+            // Deduct from pending (cash is consumed)
+            await supabase.from('cash_balances').update({
+              pending_cash: Math.max(0, Number(bal.pending_cash) - confirmDialog.totalAmount),
+              last_updated: new Date().toISOString(),
+            }).eq('id', bal.id);
+          } else {
+            // Cancel: release reserved cash back to available
+            await supabase.from('cash_balances').update({
+              available_cash: Number(bal.available_cash) + confirmDialog.totalAmount,
+              pending_cash: Math.max(0, Number(bal.pending_cash) - confirmDialog.totalAmount),
+              last_updated: new Date().toISOString(),
+            }).eq('id', bal.id);
+          }
+        }
+      }
+
       toast({
         title: action === 'execute' ? 'Order Executed' : 'Order Cancelled',
-        description: `Order has been ${action === 'execute' ? 'executed' : 'cancelled'} successfully.`
+        description: `Order has been ${action === 'execute' ? 'executed' : 'cancelled'} successfully.${action === 'execute' && confirmDialog?.orderType === 'buy' ? ' Cash deducted.' : action === 'cancel' && confirmDialog?.orderType === 'buy' ? ' Reserved cash released.' : ''}`
       });
       fetchOrders();
+      fetchFundingDashboard();
     }
     
     setActionLoading(null);
     setConfirmDialog(null);
+  };
+
+  const handleInitiateFunding = (clientId: string, amount: number) => {
+    navigate('/funding');
   };
 
   const filteredOrders = orders.filter(order => 
@@ -168,7 +215,63 @@ const Orders = () => {
           )}
         </div>
 
-        {/* Summary Cards */}
+        {/* Funding Dashboard Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Available Cash</p>
+                  <p className="text-2xl font-bold text-emerald-600">{formatCurrency(totalAvailableCash)}</p>
+                </div>
+                <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                  <Wallet className="h-5 w-5 text-emerald-500" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Pending Funding</p>
+                  <p className="text-2xl font-bold text-amber-600">{formatCurrency(pendingFundingAmount)}</p>
+                </div>
+                <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center">
+                  <ArrowUpRight className="h-5 w-5 text-amber-500" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Upcoming Settlements</p>
+                  <p className="text-2xl font-bold">{upcomingSettlements}</p>
+                </div>
+                <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+                  <CalendarClock className="h-5 w-5 text-blue-500" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className={failedFundingCount > 0 ? 'border-destructive/50' : ''}>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Failed Funding</p>
+                  <p className={`text-2xl font-bold ${failedFundingCount > 0 ? 'text-destructive' : ''}`}>{failedFundingCount}</p>
+                </div>
+                <div className={`h-10 w-10 rounded-full flex items-center justify-center ${failedFundingCount > 0 ? 'bg-destructive/10' : 'bg-muted'}`}>
+                  <AlertTriangle className={`h-5 w-5 ${failedFundingCount > 0 ? 'text-destructive' : 'text-muted-foreground'}`} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Order Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="glass rounded-xl p-5">
             <p className="text-sm text-muted-foreground">Pending Orders</p>
@@ -180,15 +283,11 @@ const Orders = () => {
           </div>
           <div className="glass rounded-xl p-5">
             <p className="text-sm text-muted-foreground">Total Volume</p>
-            <p className="text-2xl font-semibold mt-1">
-              {formatCurrency(totalVolume, true)}
-            </p>
+            <p className="text-2xl font-semibold mt-1">{formatCurrency(totalVolume, true)}</p>
           </div>
           <div className="glass rounded-xl p-5">
             <p className="text-sm text-muted-foreground">Executed Volume</p>
-            <p className="text-2xl font-semibold mt-1 text-success">
-              {formatCurrency(totalExecutedVolume, true)}
-            </p>
+            <p className="text-2xl font-semibold mt-1 text-success">{formatCurrency(totalExecutedVolume, true)}</p>
           </div>
         </div>
 
@@ -237,7 +336,8 @@ const Orders = () => {
       <NewOrderModal 
         open={newOrderOpen} 
         onOpenChange={setNewOrderOpen}
-        onSuccess={fetchOrders}
+        onSuccess={() => { fetchOrders(); fetchFundingDashboard(); }}
+        onInitiateFunding={handleInitiateFunding}
       />
 
       <AlertDialog open={confirmDialog?.open} onOpenChange={(open) => !open && setConfirmDialog(null)}>
@@ -279,6 +379,9 @@ function renderOrdersTable(
     orderId: string;
     action: 'execute' | 'cancel';
     symbol: string;
+    clientId: string;
+    orderType: string;
+    totalAmount: number | null;
   } | null>>,
   setNewOrderOpen: React.Dispatch<React.SetStateAction<boolean>>,
   isExecutionsView: boolean
@@ -355,10 +458,7 @@ function renderOrdersTable(
             const executionTypeLabel = order.execution_type ? executionTypeLabels[order.execution_type] : 'Market';
             
             return (
-              <TableRow
-                key={order.id}
-                className="hover:bg-muted/20 transition-colors border-border"
-              >
+              <TableRow key={order.id} className="hover:bg-muted/20 transition-colors border-border">
                 <TableCell className="font-mono text-sm">{order.id.slice(0, 8)}</TableCell>
                 <TableCell>{order.clients?.client_name || 'Unknown'}</TableCell>
                 <TableCell>
@@ -368,9 +468,7 @@ function renderOrdersTable(
                 </TableCell>
                 <TableCell className="font-medium">{order.symbol}</TableCell>
                 <TableCell>
-                  <Badge variant="secondary" className="text-xs">
-                    {executionTypeLabel}
-                  </Badge>
+                  <Badge variant="secondary" className="text-xs">{executionTypeLabel}</Badge>
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{Number(order.quantity).toLocaleString()}</TableCell>
                 
@@ -412,10 +510,8 @@ function renderOrdersTable(
                               variant="ghost"
                               className="h-8 w-8 p-0 text-success hover:text-success hover:bg-success/20"
                               onClick={() => setConfirmDialog({ 
-                                open: true, 
-                                orderId: order.id, 
-                                action: 'execute',
-                                symbol: order.symbol 
+                                open: true, orderId: order.id, action: 'execute', symbol: order.symbol,
+                                clientId: order.client_id, orderType: order.order_type, totalAmount: Number(order.total_amount) || null,
                               })}
                               disabled={actionLoading === order.id}
                             >
@@ -426,19 +522,15 @@ function renderOrdersTable(
                               variant="ghost"
                               className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/20"
                               onClick={() => setConfirmDialog({ 
-                                open: true, 
-                                orderId: order.id, 
-                                action: 'cancel',
-                                symbol: order.symbol 
+                                open: true, orderId: order.id, action: 'cancel', symbol: order.symbol,
+                                clientId: order.client_id, orderType: order.order_type, totalAmount: Number(order.total_amount) || null,
                               })}
                               disabled={actionLoading === order.id}
                             >
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
+                        ) : null}
                       </TableCell>
                     )}
                   </>
