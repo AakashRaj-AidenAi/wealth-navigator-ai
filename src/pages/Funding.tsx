@@ -21,7 +21,8 @@ import {
   XCircle, AlertCircle, History, IndianRupee, Trash2, ChevronDown, ChevronRight,
   AlertTriangle, ArrowRight, Zap, FileText, Eye, Bell, Brain, TrendingDown,
   TrendingUp, Shield, Activity, Sparkles, BarChart3, Target, ArrowDownRight,
-  ClipboardList, BookOpen, ThumbsUp, ThumbsDown, Send, Ban, Undo2,
+  ClipboardList, BookOpen, ThumbsUp, ThumbsDown, Send, Ban, Undo2, ShieldAlert,
+  Lock, Fingerprint, Scale,
 } from 'lucide-react';
 import { PayoutSettlementTracker, SettlementTimeline } from '@/components/funding/PayoutSettlementTracker';
 import { format, differenceInDays, addDays } from 'date-fns';
@@ -111,6 +112,16 @@ interface WithdrawalLimit {
   monthly_limit: number; created_at: string;
   clients?: { client_name: string };
 }
+interface AuditLogEntry {
+  id: string; entity_type: string; entity_id: string; action: string;
+  actor_id: string; details: any; created_at: string;
+}
+interface ComplianceAlert {
+  id: string; payout_id: string; alert_type: string; severity: string;
+  title: string; description: string | null; is_resolved: boolean; created_at: string;
+}
+
+const DUAL_APPROVAL_THRESHOLD = 1000000; // ₹10L
 
 // ─── Status Visuals ───
 const stageIconMap: Record<string, React.ElementType> = {
@@ -248,8 +259,12 @@ const Funding = () => {
   const [payoutTransactions, setPayoutTransactions] = useState<PayoutTransaction[]>([]);
   const [withdrawalLimits, setWithdrawalLimits] = useState<WithdrawalLimit[]>([]);
   const [showPayoutDialog, setShowPayoutDialog] = useState(false);
-  const [payoutForm, setPayoutForm] = useState({ client_id: '', payout_type: 'ACH', amount: '', linked_trade_id: '', settlement_date: '', notes: '' });
+  const [payoutForm, setPayoutForm] = useState({ client_id: '', payout_type: 'ACH', amount: '', linked_trade_id: '', settlement_date: '', notes: '', funding_account_id: '' });
   const [payoutStatusFilter, setPayoutStatusFilter] = useState('all');
+
+  // Compliance state
+  const [payoutAuditLogs, setPayoutAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [complianceAlerts, setComplianceAlerts] = useState<ComplianceAlert[]>([]);
 
   // Form states
   const [showAccountDialog, setShowAccountDialog] = useState(false);
@@ -261,7 +276,7 @@ const Funding = () => {
   const fetchAll = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const [clientsRes, accountsRes, requestsRes, balancesRes, alertsRes, ordersRes, payoutsRes, payoutTxRes, limitsRes] = await Promise.all([
+    const [clientsRes, accountsRes, requestsRes, balancesRes, alertsRes, ordersRes, payoutsRes, payoutTxRes, limitsRes, auditRes, compAlertRes] = await Promise.all([
       supabase.from('clients').select('id, client_name').eq('advisor_id', user.id).order('client_name'),
       supabase.from('funding_accounts').select('*, clients(client_name)').eq('advisor_id', user.id).order('created_at', { ascending: false }),
       supabase.from('funding_requests').select('*, clients(client_name), funding_accounts(bank_name, account_number)').eq('initiated_by', user.id).order('created_at', { ascending: false }),
@@ -271,6 +286,8 @@ const Funding = () => {
       supabase.from('payout_requests').select('*, clients(client_name)').eq('advisor_id', user.id).order('created_at', { ascending: false }),
       supabase.from('payout_transactions').select('*').order('created_at', { ascending: false }),
       supabase.from('withdrawal_limits').select('*, clients(client_name)').eq('advisor_id', user.id),
+      (supabase as any).from('funding_audit_log').select('*').eq('actor_id', user.id).order('created_at', { ascending: false }).limit(200),
+      (supabase as any).from('payout_compliance_alerts').select('*').eq('is_resolved', false).order('created_at', { ascending: false }),
     ]);
     setClients(clientsRes.data || []);
     setAccounts((accountsRes.data as any) || []);
@@ -281,10 +298,78 @@ const Funding = () => {
     setPayoutRequests((payoutsRes.data as any) || []);
     setPayoutTransactions((payoutTxRes.data as any) || []);
     setWithdrawalLimits((limitsRes.data as any) || []);
+    setPayoutAuditLogs((auditRes.data as any) || []);
+    setComplianceAlerts((compAlertRes.data as any) || []);
     setLoading(false);
   }, [user]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // ─── Audit Trail Helper ───
+  const logAudit = async (entityType: string, entityId: string, action: string, details: any) => {
+    if (!user) return;
+    await (supabase as any).from('funding_audit_log').insert({
+      entity_type: entityType,
+      entity_id: entityId,
+      action,
+      actor_id: user.id,
+      details,
+    });
+  };
+
+  // ─── Compliance Detection ───
+  const detectComplianceFlags = (clientId: string, amount: number, payoutType: string) => {
+    const flags: { type: string; severity: string; title: string; description: string }[] = [];
+
+    // 1. Large withdrawal (>= ₹10L)
+    if (amount >= DUAL_APPROVAL_THRESHOLD) {
+      flags.push({ type: 'large_withdrawal', severity: 'high', title: 'Large Withdrawal Alert', description: `Payout of ${formatCurrency(amount)} exceeds dual-approval threshold of ${formatCurrency(DUAL_APPROVAL_THRESHOLD)}. Requires second approval.` });
+    }
+
+    // 2. Multiple withdrawals in 24h
+    const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentPayouts = payoutRequests.filter(p => p.client_id === clientId && new Date(p.requested_date) > last24h && p.status !== 'Failed');
+    if (recentPayouts.length >= 2) {
+      flags.push({ type: 'multiple_withdrawals', severity: 'medium', title: 'Multiple Withdrawal Alert', description: `${recentPayouts.length + 1} withdrawal requests in 24 hours for this client. Manual review recommended.` });
+    }
+
+    // 3. Unusual pattern: payout > 50% of available cash
+    const bal = balances.find(b => b.client_id === clientId);
+    const availCash = Number(bal?.available_cash || 0);
+    if (availCash > 0 && amount > availCash * 0.5) {
+      flags.push({ type: 'unusual_pattern', severity: 'medium', title: 'Unusual Pattern Detected', description: `Withdrawal of ${formatCurrency(amount)} is ${Math.round((amount / availCash) * 100)}% of available cash (${formatCurrency(availCash)}).` });
+    }
+
+    // 4. Wire transfer > ₹5L (same-day priority needs extra scrutiny)
+    if (payoutType === 'Wire' && amount >= 500000) {
+      flags.push({ type: 'high_value_wire', severity: 'medium', title: 'High-Value Wire Transfer', description: `Same-day wire of ${formatCurrency(amount)} flagged for expedited review.` });
+    }
+
+    return flags;
+  };
+
+  const createComplianceAlerts = async (payoutId: string, flags: { type: string; severity: string; title: string; description: string }[]) => {
+    for (const flag of flags) {
+      await (supabase as any).from('payout_compliance_alerts').insert({
+        payout_id: payoutId,
+        alert_type: flag.type,
+        severity: flag.severity,
+        title: flag.title,
+        description: flag.description,
+      });
+    }
+  };
+
+  const resolveComplianceAlert = async (alertId: string) => {
+    if (!user) return;
+    await (supabase as any).from('payout_compliance_alerts').update({
+      is_resolved: true,
+      resolved_by: user.id,
+      resolved_at: new Date().toISOString(),
+    }).eq('id', alertId);
+    await logAudit('compliance_alert', alertId, 'resolve_alert', { resolved_by: user.id });
+    fetchAll();
+  };
 
   const fetchAIInsights = useCallback(async () => {
     if (!user) return;
@@ -483,6 +568,15 @@ const Funding = () => {
     const dailyLimit = Number(limit?.daily_limit || 500000);
     const monthlyLimit = Number(limit?.monthly_limit || 5000000);
 
+    // Compliance: Bank account verification required
+    if (payoutForm.funding_account_id) {
+      const acct = accounts.find(a => a.id === payoutForm.funding_account_id);
+      if (acct && acct.verification_status !== 'verified') {
+        toast({ title: 'Bank Not Verified', description: 'The selected bank account must be verified before processing a payout.', variant: 'destructive' });
+        return;
+      }
+    }
+
     // Validation 1: Funds still pending settlement
     if (pendingCash > 0 && availableCash < amount) {
       toast({ title: 'Settlement Pending', description: `${formatCurrency(pendingCash)} is still pending settlement. Wait for funds to clear before requesting a payout.`, variant: 'destructive' });
@@ -498,7 +592,7 @@ const Funding = () => {
       toast({ title: 'Daily Limit Exceeded', description: `Payout amount exceeds daily limit of ${formatCurrency(dailyLimit)}.`, variant: 'destructive' });
       return;
     }
-    // Validation 4: Monthly limit check (sum of completed payouts this month + current)
+    // Validation 4: Monthly limit check
     const thisMonth = new Date();
     const monthStart = new Date(thisMonth.getFullYear(), thisMonth.getMonth(), 1).toISOString();
     const monthPayouts = payoutRequests
@@ -509,10 +603,11 @@ const Funding = () => {
       return;
     }
 
-    // Auto-link trade reference if a linked trade ID is provided
-    const tradeRef = payoutForm.linked_trade_id || null;
+    // Compliance: Detect flags
+    const complianceFlags = detectComplianceFlags(payoutForm.client_id, amount, payoutForm.payout_type);
+    const requiresDualApproval = amount >= DUAL_APPROVAL_THRESHOLD;
 
-    // Calculate estimated completion
+    const tradeRef = payoutForm.linked_trade_id || null;
     const estDays = payoutForm.payout_type === 'Wire' ? 1 : payoutForm.payout_type === 'ACH' ? 2 : 7;
     const estimatedCompletion = addDays(new Date(), estDays).toISOString();
 
@@ -526,22 +621,50 @@ const Funding = () => {
       notes: payoutForm.notes || null,
       workflow_stage: 'requested',
       estimated_completion: estimatedCompletion,
+      requires_dual_approval: requiresDualApproval,
+      compliance_flags: complianceFlags,
+      review_status: complianceFlags.length > 0 ? 'flagged' : 'none',
+      funding_account_id: payoutForm.funding_account_id || null,
     }).select().single();
     if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-    // Log initial history
+
     if (newPayout && user) {
+      // Log payout history
       await (supabase as any).from('payout_status_history').insert({
         payout_id: newPayout.id, from_stage: null, to_stage: 'requested',
-        changed_by: user.id, note: `${payoutForm.payout_type} payout requested for ${formatCurrency(amount)}`,
+        changed_by: user.id, note: `${payoutForm.payout_type} payout requested for ${formatCurrency(amount)}${requiresDualApproval ? ' [DUAL APPROVAL REQUIRED]' : ''}`,
+      });
+
+      // Create compliance alerts
+      if (complianceFlags.length > 0) {
+        await createComplianceAlerts(newPayout.id, complianceFlags);
+      }
+
+      // Audit trail
+      await logAudit('payout', newPayout.id, 'payout_requested', {
+        client_id: payoutForm.client_id, amount, payout_type: payoutForm.payout_type,
+        requires_dual_approval: requiresDualApproval, compliance_flags: complianceFlags.length,
+        funding_account_id: payoutForm.funding_account_id || null,
       });
     }
-    toast({ title: 'Payout request created' });
+
+    toast({
+      title: requiresDualApproval ? 'Payout Requires Dual Approval' : 'Payout request created',
+      description: requiresDualApproval ? `Amount ≥ ${formatCurrency(DUAL_APPROVAL_THRESHOLD)} requires a second approver.` : undefined,
+      variant: requiresDualApproval ? 'default' : undefined,
+    });
     setShowPayoutDialog(false);
-    setPayoutForm({ client_id: '', payout_type: 'ACH', amount: '', linked_trade_id: '', settlement_date: '', notes: '' });
+    setPayoutForm({ client_id: '', payout_type: 'ACH', amount: '', linked_trade_id: '', settlement_date: '', notes: '', funding_account_id: '' });
     fetchAll();
   };
 
   const handleApprovePayout = async (id: string) => {
+    const payout = payoutRequests.find(p => p.id === id);
+    // Dual approval check: if requires_dual_approval and approved_by is the same user, block
+    if (payout && (payout as any).requires_dual_approval && payout.approved_by === user?.id) {
+      toast({ title: 'Dual Approval Required', description: 'A different approver must provide the second approval for this payout.', variant: 'destructive' });
+      return;
+    }
     await handleAdvancePayoutStage(id, 'approved');
   };
 
@@ -580,6 +703,7 @@ const Funding = () => {
       stage_updated_at: new Date().toISOString(),
     };
     if (nextStage === 'completed') updates.completed_at = new Date().toISOString();
+    if (nextStage === 'approved') updates.approved_by = user.id;
 
     const { error } = await (supabase as any).from('payout_requests').update(updates).eq('id', id);
     if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
@@ -588,6 +712,12 @@ const Funding = () => {
     await (supabase as any).from('payout_status_history').insert({
       payout_id: id, from_stage: prevStage, to_stage: nextStage,
       changed_by: user.id, note: `${wf.labels[prevStage] || prevStage} → ${wf.labels[nextStage] || nextStage}`,
+    });
+
+    // Audit trail
+    await logAudit('payout', id, `payout_${nextStage}`, {
+      from_stage: prevStage, to_stage: nextStage, amount: Number(payout.amount),
+      client_id: payout.client_id, payout_type: payout.payout_type,
     });
 
     // Auto-deduct cash on completion
@@ -599,6 +729,7 @@ const Funding = () => {
           last_updated: new Date().toISOString(),
         }).eq('id', existing.id);
       }
+      await logAudit('cash_balance', payout.client_id, 'cash_deducted', { amount: Number(payout.amount), payout_id: id });
     }
 
     toast({ title: `Payout advanced to ${wf.labels[nextStage] || nextStage}` });
@@ -634,11 +765,19 @@ const Funding = () => {
       changed_by: user.id, note: `Reversed: ${reason}`,
     });
 
+    // Audit trail
+    await logAudit('payout', id, 'payout_reversed', {
+      reason, amount: Number(payout.amount), client_id: payout.client_id,
+    });
+    await logAudit('cash_balance', payout.client_id, 'cash_restored', { amount: Number(payout.amount), payout_id: id });
+
     toast({ title: 'Payout reversed, cash restored' });
     fetchAll();
   };
 
   const handleDeletePayout = async (id: string) => {
+    if (!user) return;
+    await logAudit('payout', id, 'payout_deleted', {});
     const { error } = await supabase.from('payout_requests').delete().eq('id', id);
     if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
     toast({ title: 'Payout deleted' });
@@ -721,6 +860,7 @@ const Funding = () => {
             <TabsTrigger value="payout-approval"><ClipboardList className="h-4 w-4 mr-1.5" /> Approval Queue{pendingPayouts > 0 && <Badge variant="destructive" className="ml-1.5 h-5 px-1.5 text-[10px]">{pendingPayouts}</Badge>}</TabsTrigger>
             <TabsTrigger value="payout-history"><BookOpen className="h-4 w-4 mr-1.5" /> Payout History</TabsTrigger>
             <TabsTrigger value="ai-intelligence" onClick={() => { if (!aiInsights && !aiLoading) fetchAIInsights(); }}><Brain className="h-4 w-4 mr-1.5" /> AI Intelligence</TabsTrigger>
+            <TabsTrigger value="compliance-audit"><ShieldAlert className="h-4 w-4 mr-1.5" /> Compliance & Audit{complianceAlerts.length > 0 && <Badge variant="destructive" className="ml-1.5 h-5 px-1.5 text-[10px]">{complianceAlerts.length}</Badge>}</TabsTrigger>
           </TabsList>
 
           {/* ─── Accounts Tab ─── */}
@@ -970,6 +1110,35 @@ const Funding = () => {
                         </Select>
                       </div>
                       <div><Label>Amount (₹)</Label><Input type="number" value={payoutForm.amount} onChange={e => setPayoutForm(p => ({ ...p, amount: e.target.value }))} placeholder="0.00" /></div>
+                      {/* Bank Account Selection (Compliance: must be verified) */}
+                      {payoutForm.client_id && (
+                        <div>
+                          <Label>Payout Bank Account</Label>
+                          <Select value={payoutForm.funding_account_id} onValueChange={v => setPayoutForm(p => ({ ...p, funding_account_id: v }))}>
+                            <SelectTrigger><SelectValue placeholder="Select verified account" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">None</SelectItem>
+                              {accounts.filter(a => a.client_id === payoutForm.client_id).map(a => (
+                                <SelectItem key={a.id} value={a.id}>
+                                  {a.bank_name} — {maskAccount(a.account_number)} {a.verification_status !== 'verified' ? '⚠️ Unverified' : '✅'}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {payoutForm.funding_account_id && (() => {
+                            const acct = accounts.find(a => a.id === payoutForm.funding_account_id);
+                            if (acct && acct.verification_status !== 'verified') {
+                              return (
+                                <div className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/5 p-2 text-xs text-destructive mt-2">
+                                  <Lock className="h-3.5 w-3.5 flex-shrink-0" />
+                                  <span>This account is not verified. Payout will be blocked.</span>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+                      )}
                       {payoutForm.client_id && (() => {
                         const limit = withdrawalLimits.find(l => l.client_id === payoutForm.client_id);
                         const bal = balances.find(b => b.client_id === payoutForm.client_id);
@@ -978,6 +1147,7 @@ const Funding = () => {
                         const requestedAmt = parseFloat(payoutForm.amount) || 0;
                         const hasPendingFunds = pendCash > 0 && availCash < requestedAmt;
                         const insufficientCash = requestedAmt > availCash;
+                        const needsDualApproval = requestedAmt >= DUAL_APPROVAL_THRESHOLD;
                         return (
                           <div className="space-y-3">
                             <div className="rounded-lg border p-3 space-y-1.5 text-sm">
@@ -988,7 +1158,14 @@ const Funding = () => {
                               )}
                               <div className="flex justify-between"><span className="text-muted-foreground">Daily Limit:</span><span className="font-medium">{formatCurrency(Number(limit?.daily_limit || 500000))}</span></div>
                               <div className="flex justify-between"><span className="text-muted-foreground">Monthly Limit:</span><span className="font-medium">{formatCurrency(Number(limit?.monthly_limit || 5000000))}</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">Dual Approval Threshold:</span><span className="font-medium">{formatCurrency(DUAL_APPROVAL_THRESHOLD)}</span></div>
                             </div>
+                            {needsDualApproval && (
+                              <div className="flex items-center gap-2 rounded-lg border border-primary/50 bg-primary/5 p-3 text-sm">
+                                <ShieldAlert className="h-4 w-4 flex-shrink-0 text-primary" />
+                                <span className="font-medium">Dual approval required — a second approver must confirm this payout.</span>
+                              </div>
+                            )}
                             {hasPendingFunds && (
                               <div className="flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-400">
                                 <Clock className="h-4 w-4 flex-shrink-0" />
@@ -1069,6 +1246,8 @@ const Funding = () => {
                                 <Badge variant="outline">{p.payout_type}</Badge>
                                 <span className="font-semibold">{formatCurrency(Number(p.amount))}</span>
                                 {p.linked_trade_id && <Badge variant="secondary" className="text-xs">Trade: {p.linked_trade_id.slice(0, 8)}</Badge>}
+                                {(p as any).requires_dual_approval && <Badge variant="outline" className="text-xs border-primary text-primary gap-1"><Scale className="h-3 w-3" /> Dual Approval</Badge>}
+                                {(p as any).review_status === 'flagged' && <Badge variant="outline" className="text-xs border-amber-500 text-amber-500 gap-1"><AlertTriangle className="h-3 w-3" /> Flagged</Badge>}
                               </div>
                               <p className="text-xs text-muted-foreground mt-1">Requested {format(new Date(p.requested_date), 'dd MMM yyyy, HH:mm')}</p>
                               {p.notes && <p className="text-xs text-muted-foreground mt-1">{p.notes}</p>}
@@ -1418,6 +1597,112 @@ const Funding = () => {
                   </div>
                 </>
               )}
+            </div>
+          </TabsContent>
+
+          {/* ─── Compliance & Audit Trail Tab ─── */}
+          <TabsContent value="compliance-audit">
+            <div className="space-y-6">
+              {/* Compliance Alerts */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2"><ShieldAlert className="h-5 w-5 text-destructive" /> Active Compliance Alerts</CardTitle>
+                      <CardDescription>Flagged payouts requiring review or manual intervention</CardDescription>
+                    </div>
+                    <Badge variant={complianceAlerts.length > 0 ? 'destructive' : 'secondary'}>{complianceAlerts.length} Active</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {complianceAlerts.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Shield className="h-10 w-10 mx-auto text-emerald-500 mb-3" />
+                      <p className="text-muted-foreground">No active compliance alerts — all clear</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {complianceAlerts.map(ca => {
+                        const payout = payoutRequests.find(p => p.id === ca.payout_id);
+                        return (
+                          <div key={ca.id} className={cn('border rounded-lg p-4', ca.severity === 'high' ? 'border-destructive/50 bg-destructive/5' : 'border-amber-500/50 bg-amber-500/5')}>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap mb-1">
+                                  <Badge variant={ca.severity === 'high' ? 'destructive' : 'outline'} className="text-[10px]">{ca.severity.toUpperCase()}</Badge>
+                                  <Badge variant="secondary" className="text-[10px]">{ca.alert_type.replace(/_/g, ' ')}</Badge>
+                                  {payout && <span className="text-xs text-muted-foreground">{(payout as any).clients?.client_name} • {formatCurrency(Number(payout.amount))}</span>}
+                                </div>
+                                <p className="font-medium text-sm">{ca.title}</p>
+                                {ca.description && <p className="text-xs text-muted-foreground mt-1">{ca.description}</p>}
+                                <p className="text-xs text-muted-foreground mt-1">{format(new Date(ca.created_at), 'dd MMM yyyy, HH:mm')}</p>
+                              </div>
+                              <Button size="sm" variant="outline" onClick={() => resolveComplianceAlert(ca.id)}>
+                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Resolve
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Compliance Summary */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card><CardContent className="pt-6"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Dual Approval Required</p><p className="text-2xl font-bold">{payoutRequests.filter(p => (p as any).requires_dual_approval && p.status === 'Requested').length}</p></div><div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center"><Scale className="h-5 w-5 text-primary" /></div></div></CardContent></Card>
+                <Card><CardContent className="pt-6"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Flagged Payouts</p><p className="text-2xl font-bold">{payoutRequests.filter(p => (p as any).review_status === 'flagged').length}</p></div><div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center"><AlertTriangle className="h-5 w-5 text-amber-500" /></div></div></CardContent></Card>
+                <Card><CardContent className="pt-6"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Verified Accounts</p><p className="text-2xl font-bold">{accounts.filter(a => a.verification_status === 'verified').length}/{accounts.length}</p></div><div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center"><Fingerprint className="h-5 w-5 text-emerald-500" /></div></div></CardContent></Card>
+                <Card><CardContent className="pt-6"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Audit Events (Today)</p><p className="text-2xl font-bold">{payoutAuditLogs.filter(l => new Date(l.created_at).toDateString() === new Date().toDateString()).length}</p></div><div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center"><FileText className="h-5 w-5 text-blue-500" /></div></div></CardContent></Card>
+              </div>
+
+              {/* Full Audit Trail */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><History className="h-5 w-5 text-primary" /> Payout Audit Trail</CardTitle>
+                  <CardDescription>Complete audit log of every payout action</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {payoutAuditLogs.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">No audit events recorded yet.</p>
+                  ) : (
+                    <div className="space-y-0 max-h-[500px] overflow-y-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Timestamp</TableHead>
+                            <TableHead>Action</TableHead>
+                            <TableHead>Entity</TableHead>
+                            <TableHead>Details</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {payoutAuditLogs.map(log => (
+                            <TableRow key={log.id}>
+                              <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{format(new Date(log.created_at), 'dd MMM yyyy, HH:mm:ss')}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="text-[10px]">{log.action.replace(/_/g, ' ').toUpperCase()}</Badge>
+                              </TableCell>
+                              <TableCell className="text-xs">
+                                <span className="font-medium">{log.entity_type}</span>
+                                <span className="text-muted-foreground ml-1 font-mono">{log.entity_id.slice(0, 8)}...</span>
+                              </TableCell>
+                              <TableCell className="text-xs max-w-[300px] truncate">
+                                {log.details?.amount ? `${formatCurrency(log.details.amount)}` : ''}
+                                {log.details?.payout_type ? ` • ${log.details.payout_type}` : ''}
+                                {log.details?.from_stage ? ` • ${log.details.from_stage} → ${log.details.to_stage}` : ''}
+                                {log.details?.reason ? ` • ${log.details.reason}` : ''}
+                                {log.details?.compliance_flags ? ` • ${log.details.compliance_flags} flag(s)` : ''}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
         </Tabs>

@@ -1602,6 +1602,39 @@ export type Database = {
           },
         ]
       }
+      funding_audit_log: {
+        Row: {
+          action: string
+          actor_id: string
+          created_at: string
+          details: Json | null
+          entity_id: string
+          entity_type: string
+          id: string
+          ip_address: string | null
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          created_at?: string
+          details?: Json | null
+          entity_id: string
+          entity_type: string
+          id?: string
+          ip_address?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          created_at?: string
+          details?: Json | null
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          ip_address?: string | null
+        }
+        Relationships: []
+      }
       funding_requests: {
         Row: {
           amount: number
@@ -2151,6 +2184,53 @@ export type Database = {
           },
         ]
       }
+      payout_compliance_alerts: {
+        Row: {
+          alert_type: string
+          created_at: string
+          description: string | null
+          id: string
+          is_resolved: boolean
+          payout_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          title: string
+        }
+        Insert: {
+          alert_type: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_resolved?: boolean
+          payout_id: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          title: string
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_resolved?: boolean
+          payout_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_compliance_alerts_payout_id_fkey"
+            columns: ["payout_id"]
+            isOneToOne: false
+            referencedRelation: "payout_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payout_requests: {
         Row: {
           advisor_id: string
@@ -2158,15 +2238,20 @@ export type Database = {
           approved_by: string | null
           client_id: string
           completed_at: string | null
+          compliance_flags: Json | null
           created_at: string
           estimated_completion: string | null
+          funding_account_id: string | null
           id: string
           linked_trade_id: string | null
           notes: string | null
           payout_type: string
           requested_date: string
+          requires_dual_approval: boolean
           reversal_reason: string | null
           reversed_at: string | null
+          review_status: string
+          second_approver_id: string | null
           settlement_date: string | null
           stage_updated_at: string
           status: string
@@ -2179,15 +2264,20 @@ export type Database = {
           approved_by?: string | null
           client_id: string
           completed_at?: string | null
+          compliance_flags?: Json | null
           created_at?: string
           estimated_completion?: string | null
+          funding_account_id?: string | null
           id?: string
           linked_trade_id?: string | null
           notes?: string | null
           payout_type: string
           requested_date?: string
+          requires_dual_approval?: boolean
           reversal_reason?: string | null
           reversed_at?: string | null
+          review_status?: string
+          second_approver_id?: string | null
           settlement_date?: string | null
           stage_updated_at?: string
           status?: string
@@ -2200,15 +2290,20 @@ export type Database = {
           approved_by?: string | null
           client_id?: string
           completed_at?: string | null
+          compliance_flags?: Json | null
           created_at?: string
           estimated_completion?: string | null
+          funding_account_id?: string | null
           id?: string
           linked_trade_id?: string | null
           notes?: string | null
           payout_type?: string
           requested_date?: string
+          requires_dual_approval?: boolean
           reversal_reason?: string | null
           reversed_at?: string | null
+          review_status?: string
+          second_approver_id?: string | null
           settlement_date?: string | null
           stage_updated_at?: string
           status?: string
@@ -2221,6 +2316,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payout_requests_funding_account_id_fkey"
+            columns: ["funding_account_id"]
+            isOneToOne: false
+            referencedRelation: "funding_accounts"
             referencedColumns: ["id"]
           },
         ]
