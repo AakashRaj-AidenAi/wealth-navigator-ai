@@ -20,7 +20,8 @@ import {
   Wallet, Plus, RefreshCw, Building2, ArrowUpRight, Clock, CheckCircle2,
   XCircle, AlertCircle, History, IndianRupee, Trash2, ChevronDown, ChevronRight,
   AlertTriangle, ArrowRight, Zap, FileText, Eye, Bell, Brain, TrendingDown,
-  TrendingUp, Shield, Activity, Sparkles, BarChart3, Target,
+  TrendingUp, Shield, Activity, Sparkles, BarChart3, Target, ArrowDownRight,
+  ClipboardList, BookOpen, ThumbsUp, ThumbsDown, Send,
 } from 'lucide-react';
 import { format, differenceInDays, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -90,6 +91,22 @@ interface CashBalance {
   last_updated: string; clients?: { client_name: string };
 }
 interface ClientOption { id: string; client_name: string; }
+interface PayoutRequest {
+  id: string; client_id: string; advisor_id: string; payout_type: string;
+  amount: number; status: string; linked_trade_id: string | null;
+  requested_date: string; approved_by: string | null; settlement_date: string | null;
+  notes: string | null; created_at: string;
+  clients?: { client_name: string };
+}
+interface PayoutTransaction {
+  id: string; payout_id: string; external_reference: string | null;
+  transfer_date: string | null; confirmation_status: string; created_at: string;
+}
+interface WithdrawalLimit {
+  id: string; client_id: string; advisor_id: string; daily_limit: number;
+  monthly_limit: number; created_at: string;
+  clients?: { client_name: string };
+}
 
 // ─── Status Visuals ───
 const stageIconMap: Record<string, React.ElementType> = {
@@ -223,6 +240,13 @@ const Funding = () => {
   const [aiInsights, setAiInsights] = useState<any>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
+  const [payoutRequests, setPayoutRequests] = useState<PayoutRequest[]>([]);
+  const [payoutTransactions, setPayoutTransactions] = useState<PayoutTransaction[]>([]);
+  const [withdrawalLimits, setWithdrawalLimits] = useState<WithdrawalLimit[]>([]);
+  const [showPayoutDialog, setShowPayoutDialog] = useState(false);
+  const [payoutForm, setPayoutForm] = useState({ client_id: '', payout_type: 'ACH', amount: '', linked_trade_id: '', settlement_date: '', notes: '' });
+  const [payoutStatusFilter, setPayoutStatusFilter] = useState('all');
+
   // Form states
   const [showAccountDialog, setShowAccountDialog] = useState(false);
   const [showBalanceDialog, setShowBalanceDialog] = useState(false);
@@ -233,13 +257,16 @@ const Funding = () => {
   const fetchAll = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const [clientsRes, accountsRes, requestsRes, balancesRes, alertsRes, ordersRes] = await Promise.all([
+    const [clientsRes, accountsRes, requestsRes, balancesRes, alertsRes, ordersRes, payoutsRes, payoutTxRes, limitsRes] = await Promise.all([
       supabase.from('clients').select('id, client_name').eq('advisor_id', user.id).order('client_name'),
       supabase.from('funding_accounts').select('*, clients(client_name)').eq('advisor_id', user.id).order('created_at', { ascending: false }),
       supabase.from('funding_requests').select('*, clients(client_name), funding_accounts(bank_name, account_number)').eq('initiated_by', user.id).order('created_at', { ascending: false }),
       supabase.from('cash_balances').select('*, clients(client_name)').eq('advisor_id', user.id).order('last_updated', { ascending: false }),
       supabase.from('funding_alerts').select('*').eq('advisor_id', user.id).eq('is_resolved', false).order('created_at', { ascending: false }),
       supabase.from('orders').select('id, symbol, order_type, total_amount').limit(50).order('created_at', { ascending: false }),
+      supabase.from('payout_requests').select('*, clients(client_name)').eq('advisor_id', user.id).order('created_at', { ascending: false }),
+      supabase.from('payout_transactions').select('*').order('created_at', { ascending: false }),
+      supabase.from('withdrawal_limits').select('*, clients(client_name)').eq('advisor_id', user.id),
     ]);
     setClients(clientsRes.data || []);
     setAccounts((accountsRes.data as any) || []);
@@ -247,6 +274,9 @@ const Funding = () => {
     setBalances((balancesRes.data as any) || []);
     setAlerts((alertsRes.data as any) || []);
     setOrders((ordersRes.data as any) || []);
+    setPayoutRequests((payoutsRes.data as any) || []);
+    setPayoutTransactions((payoutTxRes.data as any) || []);
+    setWithdrawalLimits((limitsRes.data as any) || []);
     setLoading(false);
   }, [user]);
 
@@ -438,12 +468,76 @@ const Funding = () => {
     fetchAll();
   };
 
+  // ─── Payout Handlers ───
+  const handleRequestPayout = async () => {
+    if (!user || !payoutForm.client_id || !payoutForm.amount) return;
+    const { error } = await supabase.from('payout_requests').insert({
+      client_id: payoutForm.client_id,
+      advisor_id: user.id,
+      payout_type: payoutForm.payout_type,
+      amount: parseFloat(payoutForm.amount),
+      linked_trade_id: payoutForm.linked_trade_id || null,
+      settlement_date: payoutForm.settlement_date || null,
+      notes: payoutForm.notes || null,
+    });
+    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
+    toast({ title: 'Payout request created' });
+    setShowPayoutDialog(false);
+    setPayoutForm({ client_id: '', payout_type: 'ACH', amount: '', linked_trade_id: '', settlement_date: '', notes: '' });
+    fetchAll();
+  };
+
+  const handleApprovePayout = async (id: string) => {
+    if (!user) return;
+    const { error } = await supabase.from('payout_requests').update({ status: 'Approved', approved_by: user.id }).eq('id', id);
+    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
+    toast({ title: 'Payout approved' });
+    fetchAll();
+  };
+
+  const handleRejectPayout = async (id: string) => {
+    if (!user) return;
+    const { error } = await supabase.from('payout_requests').update({ status: 'Failed' }).eq('id', id);
+    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
+    toast({ title: 'Payout rejected' });
+    fetchAll();
+  };
+
+  const handleAdvancePayoutStatus = async (id: string, newStatus: string) => {
+    const { error } = await supabase.from('payout_requests').update({ status: newStatus }).eq('id', id);
+    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
+    if (newStatus === 'Completed') {
+      // Deduct from cash balance
+      const payout = payoutRequests.find(p => p.id === id);
+      if (payout) {
+        const existing = balances.find(b => b.client_id === payout.client_id);
+        if (existing) {
+          await supabase.from('cash_balances').update({
+            available_cash: Math.max(0, Number(existing.available_cash) - Number(payout.amount)),
+            last_updated: new Date().toISOString(),
+          }).eq('id', existing.id);
+        }
+      }
+    }
+    toast({ title: `Payout status updated to ${newStatus}` });
+    fetchAll();
+  };
+
+  const handleDeletePayout = async (id: string) => {
+    const { error } = await supabase.from('payout_requests').delete().eq('id', id);
+    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
+    toast({ title: 'Payout deleted' });
+    fetchAll();
+  };
+
   const maskAccount = (num: string) => num.length <= 4 ? num : '••••' + num.slice(-4);
 
   const totalAvailableCash = balances.reduce((s, b) => s + Number(b.available_cash), 0);
   const totalPendingCash = balances.reduce((s, b) => s + Number(b.pending_cash), 0);
   const pendingRequests = requests.filter(r => r.workflow_stage !== 'completed' && r.workflow_stage !== 'failed').length;
+  const pendingPayouts = payoutRequests.filter(p => p.status === 'Requested').length;
   const clientAccounts = accounts.filter(a => a.client_id === requestForm.client_id);
+  const filteredPayoutHistory = payoutStatusFilter === 'all' ? payoutRequests : payoutRequests.filter(p => p.status === payoutStatusFilter);
 
   // Default settlement date based on funding type
   const getDefaultSettlement = (type: string) => {
@@ -503,11 +597,14 @@ const Funding = () => {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="bg-muted">
+          <TabsList className="bg-muted flex-wrap h-auto gap-1 p-1">
             <TabsTrigger value="dashboard"><Wallet className="h-4 w-4 mr-1.5" /> Accounts</TabsTrigger>
             <TabsTrigger value="initiate"><ArrowUpRight className="h-4 w-4 mr-1.5" /> Initiate Funding</TabsTrigger>
             <TabsTrigger value="history"><History className="h-4 w-4 mr-1.5" /> Workflow & History</TabsTrigger>
             <TabsTrigger value="ledger"><IndianRupee className="h-4 w-4 mr-1.5" /> Cash Ledger</TabsTrigger>
+            <TabsTrigger value="request-payout"><ArrowDownRight className="h-4 w-4 mr-1.5" /> Request Payout</TabsTrigger>
+            <TabsTrigger value="payout-approval"><ClipboardList className="h-4 w-4 mr-1.5" /> Approval Queue{pendingPayouts > 0 && <Badge variant="destructive" className="ml-1.5 h-5 px-1.5 text-[10px]">{pendingPayouts}</Badge>}</TabsTrigger>
+            <TabsTrigger value="payout-history"><BookOpen className="h-4 w-4 mr-1.5" /> Payout History</TabsTrigger>
             <TabsTrigger value="ai-intelligence" onClick={() => { if (!aiInsights && !aiLoading) fetchAIInsights(); }}><Brain className="h-4 w-4 mr-1.5" /> AI Intelligence</TabsTrigger>
           </TabsList>
 
@@ -734,6 +831,177 @@ const Funding = () => {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* ─── Request Payout Tab ─── */}
+          <TabsContent value="request-payout">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div><CardTitle>Request Payout</CardTitle><CardDescription>Withdraw funds after selling securities</CardDescription></div>
+                <Dialog open={showPayoutDialog} onOpenChange={setShowPayoutDialog}>
+                  <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1.5" /> New Payout Request</Button></DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader><DialogTitle>Request Payout</DialogTitle></DialogHeader>
+                    <div className="space-y-4">
+                      <div><Label>Client</Label><Select value={payoutForm.client_id} onValueChange={v => setPayoutForm(p => ({ ...p, client_id: v }))}><SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger><SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.client_name}</SelectItem>)}</SelectContent></Select></div>
+                      <div>
+                        <Label>Payout Type</Label>
+                        <Select value={payoutForm.payout_type} onValueChange={v => setPayoutForm(p => ({ ...p, payout_type: v }))}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ACH">ACH</SelectItem>
+                            <SelectItem value="Wire">Wire</SelectItem>
+                            <SelectItem value="TOA">TOA</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div><Label>Amount (₹)</Label><Input type="number" value={payoutForm.amount} onChange={e => setPayoutForm(p => ({ ...p, amount: e.target.value }))} placeholder="0.00" /></div>
+                      {payoutForm.client_id && (() => {
+                        const limit = withdrawalLimits.find(l => l.client_id === payoutForm.client_id);
+                        const bal = balances.find(b => b.client_id === payoutForm.client_id);
+                        return (
+                          <div className="rounded-lg border p-3 space-y-1 text-sm">
+                            <p className="text-muted-foreground text-xs font-medium uppercase">Limits & Balance</p>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Available Cash:</span><span className="font-medium">{formatCurrency(Number(bal?.available_cash || 0))}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Daily Limit:</span><span className="font-medium">{formatCurrency(Number(limit?.daily_limit || 500000))}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Monthly Limit:</span><span className="font-medium">{formatCurrency(Number(limit?.monthly_limit || 5000000))}</span></div>
+                          </div>
+                        );
+                      })()}
+                      <div><Label>Linked Trade ID (Optional)</Label><Input value={payoutForm.linked_trade_id} onChange={e => setPayoutForm(p => ({ ...p, linked_trade_id: e.target.value }))} placeholder="Trade reference" /></div>
+                      <div><Label>Settlement Date</Label><Input type="date" value={payoutForm.settlement_date} onChange={e => setPayoutForm(p => ({ ...p, settlement_date: e.target.value }))} /></div>
+                      <div><Label>Notes</Label><Textarea value={payoutForm.notes} onChange={e => setPayoutForm(p => ({ ...p, notes: e.target.value }))} rows={2} placeholder="Additional notes..." /></div>
+                    </div>
+                    <DialogFooter><DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose><Button onClick={handleRequestPayout} disabled={!payoutForm.client_id || !payoutForm.amount}><Send className="h-4 w-4 mr-1.5" /> Submit Request</Button></DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </CardHeader>
+              <CardContent>
+                {payoutRequests.filter(p => p.status === 'Requested').length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">No pending payout requests. Click "New Payout Request" to create one.</p>
+                ) : (
+                  <Table>
+                    <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Type</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead><TableHead>Requested</TableHead><TableHead>Trade Ref</TableHead><TableHead className="w-20"></TableHead></TableRow></TableHeader>
+                    <TableBody>
+                      {payoutRequests.filter(p => p.status === 'Requested').map(p => (
+                        <TableRow key={p.id}>
+                          <TableCell className="font-medium">{(p as any).clients?.client_name || '—'}</TableCell>
+                          <TableCell><Badge variant="outline">{p.payout_type}</Badge></TableCell>
+                          <TableCell className="font-semibold">{formatCurrency(Number(p.amount))}</TableCell>
+                          <TableCell><Badge variant="secondary">{p.status}</Badge></TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{format(new Date(p.requested_date), 'dd MMM yyyy')}</TableCell>
+                          <TableCell className="font-mono text-sm">{p.linked_trade_id || '—'}</TableCell>
+                          <TableCell><Button variant="ghost" size="icon" onClick={() => handleDeletePayout(p.id)}><Trash2 className="h-4 w-4 text-muted-foreground" /></Button></TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ─── Payout Approval Queue Tab ─── */}
+          <TabsContent value="payout-approval">
+            <Card>
+              <CardHeader><CardTitle>Payout Approval Queue</CardTitle><CardDescription>Review and approve or reject payout requests</CardDescription></CardHeader>
+              <CardContent>
+                {payoutRequests.filter(p => p.status === 'Requested' || p.status === 'Approved').length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">No payouts pending approval.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {payoutRequests.filter(p => p.status === 'Requested' || p.status === 'Approved').map(p => (
+                      <div key={p.id} className="border rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <p className="font-medium">{(p as any).clients?.client_name || '—'}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="outline">{p.payout_type}</Badge>
+                              <span className="font-semibold">{formatCurrency(Number(p.amount))}</span>
+                              {p.linked_trade_id && <Badge variant="secondary" className="text-xs">Trade: {p.linked_trade_id.slice(0, 8)}</Badge>}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">Requested {format(new Date(p.requested_date), 'dd MMM yyyy, HH:mm')}</p>
+                            {p.notes && <p className="text-xs text-muted-foreground mt-1">{p.notes}</p>}
+                          </div>
+                          <Badge variant={p.status === 'Requested' ? 'secondary' : 'default'}>{p.status}</Badge>
+                        </div>
+                        <div className="flex gap-2">
+                          {p.status === 'Requested' && (
+                            <>
+                              <Button size="sm" onClick={() => handleApprovePayout(p.id)}><ThumbsUp className="h-3.5 w-3.5 mr-1" /> Approve</Button>
+                              <Button size="sm" variant="destructive" onClick={() => handleRejectPayout(p.id)}><ThumbsDown className="h-3.5 w-3.5 mr-1" /> Reject</Button>
+                            </>
+                          )}
+                          {p.status === 'Approved' && (
+                            <>
+                              <Button size="sm" onClick={() => handleAdvancePayoutStatus(p.id, 'Processing')}><ArrowRight className="h-3.5 w-3.5 mr-1" /> Start Processing</Button>
+                              <Button size="sm" variant="destructive" onClick={() => handleAdvancePayoutStatus(p.id, 'Failed')}><XCircle className="h-3.5 w-3.5 mr-1" /> Fail</Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ─── Payout History Tab ─── */}
+          <TabsContent value="payout-history">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div><CardTitle>Payout History</CardTitle><CardDescription>All payout requests and their statuses</CardDescription></div>
+                <Select value={payoutStatusFilter} onValueChange={setPayoutStatusFilter}>
+                  <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="Requested">Requested</SelectItem>
+                    <SelectItem value="Approved">Approved</SelectItem>
+                    <SelectItem value="Processing">Processing</SelectItem>
+                    <SelectItem value="Completed">Completed</SelectItem>
+                    <SelectItem value="Failed">Failed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </CardHeader>
+              <CardContent>
+                {filteredPayoutHistory.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">No payout records found.</p>
+                ) : (
+                  <Table>
+                    <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Type</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead><TableHead>Requested</TableHead><TableHead>Settlement</TableHead><TableHead>Trade Ref</TableHead><TableHead className="w-24">Actions</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                      {filteredPayoutHistory.map(p => (
+                        <TableRow key={p.id}>
+                          <TableCell className="font-medium">{(p as any).clients?.client_name || '—'}</TableCell>
+                          <TableCell><Badge variant="outline">{p.payout_type}</Badge></TableCell>
+                          <TableCell className="font-semibold">{formatCurrency(Number(p.amount))}</TableCell>
+                          <TableCell>
+                            <Badge variant={p.status === 'Completed' ? 'default' : p.status === 'Failed' ? 'destructive' : p.status === 'Processing' ? 'outline' : 'secondary'}>
+                              {p.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{format(new Date(p.requested_date), 'dd MMM yyyy')}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{p.settlement_date ? format(new Date(p.settlement_date), 'dd MMM yyyy') : '—'}</TableCell>
+                          <TableCell className="font-mono text-sm">{p.linked_trade_id || '—'}</TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              {p.status === 'Processing' && (
+                                <Button size="sm" variant="ghost" onClick={() => handleAdvancePayoutStatus(p.id, 'Completed')}><CheckCircle2 className="h-3.5 w-3.5" /></Button>
+                              )}
+                              {(p.status === 'Requested' || p.status === 'Approved') && (
+                                <Button size="sm" variant="ghost" onClick={() => handleDeletePayout(p.id)}><Trash2 className="h-3.5 w-3.5 text-muted-foreground" /></Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* ─── AI Intelligence Tab ─── */}
           <TabsContent value="ai-intelligence">
             <div className="space-y-6">

@@ -2151,6 +2151,100 @@ export type Database = {
           },
         ]
       }
+      payout_requests: {
+        Row: {
+          advisor_id: string
+          amount: number
+          approved_by: string | null
+          client_id: string
+          created_at: string
+          id: string
+          linked_trade_id: string | null
+          notes: string | null
+          payout_type: string
+          requested_date: string
+          settlement_date: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          advisor_id: string
+          amount: number
+          approved_by?: string | null
+          client_id: string
+          created_at?: string
+          id?: string
+          linked_trade_id?: string | null
+          notes?: string | null
+          payout_type: string
+          requested_date?: string
+          settlement_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          advisor_id?: string
+          amount?: number
+          approved_by?: string | null
+          client_id?: string
+          created_at?: string
+          id?: string
+          linked_trade_id?: string | null
+          notes?: string | null
+          payout_type?: string
+          requested_date?: string
+          settlement_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payout_transactions: {
+        Row: {
+          confirmation_status: string
+          created_at: string
+          external_reference: string | null
+          id: string
+          payout_id: string
+          transfer_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          confirmation_status?: string
+          created_at?: string
+          external_reference?: string | null
+          id?: string
+          payout_id: string
+          transfer_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          confirmation_status?: string
+          created_at?: string
+          external_reference?: string | null
+          id?: string
+          payout_id?: string
+          transfer_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_transactions_payout_id_fkey"
+            columns: ["payout_id"]
+            isOneToOne: false
+            referencedRelation: "payout_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -2574,6 +2668,44 @@ export type Database = {
             columns: ["summary_id"]
             isOneToOne: false
             referencedRelation: "ai_meeting_summaries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      withdrawal_limits: {
+        Row: {
+          advisor_id: string
+          client_id: string
+          created_at: string
+          daily_limit: number
+          id: string
+          monthly_limit: number
+          updated_at: string
+        }
+        Insert: {
+          advisor_id: string
+          client_id: string
+          created_at?: string
+          daily_limit?: number
+          id?: string
+          monthly_limit?: number
+          updated_at?: string
+        }
+        Update: {
+          advisor_id?: string
+          client_id?: string
+          created_at?: string
+          daily_limit?: number
+          id?: string
+          monthly_limit?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "withdrawal_limits_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]
