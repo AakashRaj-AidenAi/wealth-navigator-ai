@@ -1561,6 +1561,47 @@ export type Database = {
           },
         ]
       }
+      funding_alerts: {
+        Row: {
+          advisor_id: string
+          alert_type: string
+          created_at: string
+          funding_request_id: string
+          id: string
+          is_resolved: boolean
+          message: string
+          resolved_at: string | null
+        }
+        Insert: {
+          advisor_id: string
+          alert_type: string
+          created_at?: string
+          funding_request_id: string
+          id?: string
+          is_resolved?: boolean
+          message: string
+          resolved_at?: string | null
+        }
+        Update: {
+          advisor_id?: string
+          alert_type?: string
+          created_at?: string
+          funding_request_id?: string
+          id?: string
+          is_resolved?: boolean
+          message?: string
+          resolved_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funding_alerts_funding_request_id_fkey"
+            columns: ["funding_request_id"]
+            isOneToOne: false
+            referencedRelation: "funding_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funding_requests: {
         Row: {
           amount: number
@@ -1571,9 +1612,12 @@ export type Database = {
           id: string
           initiated_by: string
           notes: string | null
+          settlement_date: string | null
+          stage_updated_at: string
           status: string
           trade_reference: string | null
           updated_at: string
+          workflow_stage: string
         }
         Insert: {
           amount?: number
@@ -1584,9 +1628,12 @@ export type Database = {
           id?: string
           initiated_by: string
           notes?: string | null
+          settlement_date?: string | null
+          stage_updated_at?: string
           status?: string
           trade_reference?: string | null
           updated_at?: string
+          workflow_stage?: string
         }
         Update: {
           amount?: number
@@ -1597,9 +1644,12 @@ export type Database = {
           id?: string
           initiated_by?: string
           notes?: string | null
+          settlement_date?: string | null
+          stage_updated_at?: string
           status?: string
           trade_reference?: string | null
           updated_at?: string
+          workflow_stage?: string
         }
         Relationships: [
           {
@@ -1614,6 +1664,44 @@ export type Database = {
             columns: ["funding_account_id"]
             isOneToOne: false
             referencedRelation: "funding_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funding_status_history: {
+        Row: {
+          changed_by: string
+          created_at: string
+          from_status: string | null
+          funding_request_id: string
+          id: string
+          note: string | null
+          to_status: string
+        }
+        Insert: {
+          changed_by: string
+          created_at?: string
+          from_status?: string | null
+          funding_request_id: string
+          id?: string
+          note?: string | null
+          to_status: string
+        }
+        Update: {
+          changed_by?: string
+          created_at?: string
+          from_status?: string | null
+          funding_request_id?: string
+          id?: string
+          note?: string | null
+          to_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funding_status_history_funding_request_id_fkey"
+            columns: ["funding_request_id"]
+            isOneToOne: false
+            referencedRelation: "funding_requests"
             referencedColumns: ["id"]
           },
         ]
