@@ -33,7 +33,8 @@ import {
   Brain,
   ShieldCheck,
   Activity,
-  Mic
+  Mic,
+  Wallet
 } from 'lucide-react';
 
 import { ClientOverviewTab } from '@/components/clients/ClientOverviewTab';
@@ -51,6 +52,7 @@ import { EditClientModal } from '@/components/modals/EditClientModal';
 import { QuickNoteModal } from '@/components/clients/QuickNoteModal';
 import { AIDraftMessageModal, MeetingSummaryModal, VoiceNoteModal } from '@/components/ai-growth-engine';
 import { ClientRiskProfileTab } from '@/components/risk-profiling';
+import { ClientPayoutsTab } from '@/components/clients/ClientPayoutsTab';
 import { useEngagementScores } from '@/hooks/useEngagementScores';
 import { EngagementBadge } from '@/components/clients/EngagementBadge';
 import { useChurnPredictions } from '@/hooks/useChurnPredictions';
@@ -419,6 +421,10 @@ const ClientProfile = () => {
               <Landmark className="h-4 w-4" />
               Corp Actions
             </TabsTrigger>
+            <TabsTrigger value="payouts" className="gap-2">
+              <Wallet className="h-4 w-4" />
+              Payouts
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -462,6 +468,9 @@ const ClientProfile = () => {
           </TabsContent>
           <TabsContent value="corporate-actions">
             <ClientCorporateActionsTab clientId={client.id} />
+          </TabsContent>
+          <TabsContent value="payouts">
+            <ClientPayoutsTab clientId={client.id} />
           </TabsContent>
         </Tabs>
       </div>
