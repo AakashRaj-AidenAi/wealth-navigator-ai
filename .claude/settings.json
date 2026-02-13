@@ -1,0 +1,49 @@
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Edit(src/**)",
+      "Edit(openspec/**)",
+      "Write(src/**)",
+      "Write(openspec/**)",
+      "Bash(npm run test *)",
+      "Bash(npm run lint *)",
+      "Bash(npm run build *)",
+      "Bash(npx vitest *)",
+      "Bash(npx openspec *)",
+      "Bash(openspec *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git branch *)",
+      "Bash(git add *)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "Task(Explore)",
+      "Task(Plan)",
+      "Task(general-purpose)",
+      "Task(claude-code-guide)",
+      "Task(spec-writer)",
+      "Task(code-reviewer)",
+      "Task(test-runner)",
+      "Task(frontend-builder)"
+    ],
+    "deny": [
+      "Read(.env*)",
+      "Read(**/secrets/**)",
+      "Bash(rm -rf *)",
+      "Bash(git push --force *)",
+      "Bash(git reset --hard *)"
+    ],
+    "additionalDirectories": []
+  },
+  "model": "claude-opus-4-6",
+  "alwaysThinkingEnabled": true,
+  "includeCoAuthoredBy": true,
+  "respectGitignore": true
+}

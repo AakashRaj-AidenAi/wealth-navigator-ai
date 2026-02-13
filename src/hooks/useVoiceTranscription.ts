@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { toast } from 'sonner';
 import { generateSimulatedSummary, type MeetingSummaryResult } from './useMeetingSummary';
 
@@ -45,31 +45,24 @@ export function useMockTranscription() {
     transcriptText: string,
     structured: MeetingSummaryResult
   ) => {
-    const { data: session } = await supabase.auth.getSession();
-    if (!session.session) {
-      toast.error('Please log in');
-      return null;
-    }
-
-    const { data, error } = await supabase.from('voice_note_transcriptions' as any).insert({
-      client_id: clientId,
-      advisor_id: session.session.user.id,
-      file_name: file.name,
-      file_size: file.size,
-      duration_seconds: Math.round(file.size / 16000), // rough estimate
-      raw_transcript: transcriptText,
-      topics_discussed: structured.key_discussion_points,
-      decisions: structured.decisions_made,
-      follow_up_actions: structured.action_items,
-    }).select().single();
-
-    if (error) {
+    try {
+      const data = await api.post<any>('/communications/voice-transcriptions', {
+        client_id: clientId,
+        file_name: file.name,
+        file_size: file.size,
+        duration_seconds: Math.round(file.size / 16000), // rough estimate
+        raw_transcript: transcriptText,
+        topics_discussed: structured.key_discussion_points,
+        decisions: structured.decisions_made,
+        follow_up_actions: structured.action_items,
+      });
+      toast.success('Voice note saved!');
+      return data;
+    } catch (error) {
       console.error('Error saving transcription:', error);
       toast.error('Failed to save transcription');
       return null;
     }
-    toast.success('Voice note saved!');
-    return data;
   };
 
   const reset = () => {

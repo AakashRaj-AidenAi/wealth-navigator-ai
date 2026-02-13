@@ -1,20 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/services/api';
 import { toast } from '@/hooks/use-toast';
 
 // ── Client AUM ──
 export const useClientAUM = () => {
   return useQuery({
     queryKey: ['client-aum'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('client_aum')
-        .select('*, clients(client_name)')
-        .order('last_updated', { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.get<any[]>('/clients/aum'),
   });
 };
 
@@ -29,11 +21,10 @@ export const useUpsertClientAUM = () => {
       debt_aum?: number;
       other_assets?: number;
     }) => {
-      const { data, error } = record.id
-        ? await supabase.from('client_aum').update(record).eq('id', record.id).select().single()
-        : await supabase.from('client_aum').insert(record).select().single();
-      if (error) throw error;
-      return data;
+      if (record.id) {
+        return api.put<any>(`/clients/aum/${record.id}`, record);
+      }
+      return api.post<any>('/clients/aum', record);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['client-aum'] });
@@ -47,14 +38,7 @@ export const useUpsertClientAUM = () => {
 export const useRevenueRecords = () => {
   return useQuery({
     queryKey: ['revenue-records'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('revenue_records')
-        .select('*, clients(client_name)')
-        .order('date', { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.get<any[]>('/reports/revenue'),
   });
 };
 
@@ -70,11 +54,10 @@ export const useUpsertRevenue = () => {
       date?: string;
       recurring?: boolean;
     }) => {
-      const { data, error } = record.id
-        ? await supabase.from('revenue_records').update(record).eq('id', record.id).select().single()
-        : await supabase.from('revenue_records').insert(record).select().single();
-      if (error) throw error;
-      return data;
+      if (record.id) {
+        return api.put<any>(`/reports/revenue/${record.id}`, record);
+      }
+      return api.post<any>('/reports/revenue', record);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['revenue-records'] });
@@ -87,10 +70,7 @@ export const useUpsertRevenue = () => {
 export const useDeleteRevenue = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('revenue_records').delete().eq('id', id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => api.delete<void>(`/reports/revenue/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['revenue-records'] });
       toast({ title: 'Revenue record deleted' });
@@ -103,14 +83,7 @@ export const useDeleteRevenue = () => {
 export const useCommissionRecords = () => {
   return useQuery({
     queryKey: ['commission-records'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('commission_records')
-        .select('*, clients(client_name)')
-        .order('payout_date', { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.get<any[]>('/reports/commissions'),
   });
 };
 
@@ -125,11 +98,10 @@ export const useUpsertCommission = () => {
       trail_commission?: number;
       payout_date?: string;
     }) => {
-      const { data, error } = record.id
-        ? await supabase.from('commission_records').update(record).eq('id', record.id).select().single()
-        : await supabase.from('commission_records').insert(record).select().single();
-      if (error) throw error;
-      return data;
+      if (record.id) {
+        return api.put<any>(`/reports/commissions/${record.id}`, record);
+      }
+      return api.post<any>('/reports/commissions', record);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['commission-records'] });
@@ -142,10 +114,7 @@ export const useUpsertCommission = () => {
 export const useDeleteCommission = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('commission_records').delete().eq('id', id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => api.delete<void>(`/reports/commissions/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['commission-records'] });
       toast({ title: 'Commission record deleted' });
@@ -158,20 +127,12 @@ export const useDeleteCommission = () => {
 export const useInvoices = () => {
   return useQuery({
     queryKey: ['invoices'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*, clients(client_name)')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.get<any[]>('/reports/invoices'),
   });
 };
 
 export const useUpsertInvoice = () => {
   const qc = useQueryClient();
-  const { user } = useAuth();
   return useMutation({
     mutationFn: async (record: {
       id?: string;
@@ -183,12 +144,10 @@ export const useUpsertInvoice = () => {
       status?: string;
       due_date?: string;
     }) => {
-      const payload = { ...record, advisor_id: user?.id };
-      const { data, error } = record.id
-        ? await supabase.from('invoices').update(payload).eq('id', record.id).select().single()
-        : await supabase.from('invoices').insert(payload).select().single();
-      if (error) throw error;
-      return data;
+      if (record.id) {
+        return api.put<any>(`/reports/invoices/${record.id}`, record);
+      }
+      return api.post<any>('/reports/invoices', record);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['invoices'] });
@@ -201,10 +160,7 @@ export const useUpsertInvoice = () => {
 export const useDeleteInvoice = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('invoices').delete().eq('id', id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => api.delete<void>(`/reports/invoices/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['invoices'] });
       toast({ title: 'Invoice deleted' });
@@ -217,12 +173,10 @@ export const useDeleteInvoice = () => {
 export const usePayments = (invoiceId?: string) => {
   return useQuery({
     queryKey: ['payments', invoiceId],
-    queryFn: async () => {
-      let q = supabase.from('payments').select('*').order('payment_date', { ascending: false });
-      if (invoiceId) q = q.eq('invoice_id', invoiceId);
-      const { data, error } = await q;
-      if (error) throw error;
-      return data;
+    queryFn: () => {
+      const params: Record<string, string> = {};
+      if (invoiceId) params.invoice_id = invoiceId;
+      return api.get<any[]>('/reports/payments', params);
     },
   });
 };
@@ -237,11 +191,10 @@ export const useUpsertPayment = () => {
       payment_mode?: string;
       amount_received: number;
     }) => {
-      const { data, error } = record.id
-        ? await supabase.from('payments').update(record).eq('id', record.id).select().single()
-        : await supabase.from('payments').insert(record).select().single();
-      if (error) throw error;
-      return data;
+      if (record.id) {
+        return api.put<any>(`/reports/payments/${record.id}`, record);
+      }
+      return api.post<any>('/reports/payments', record);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payments'] });

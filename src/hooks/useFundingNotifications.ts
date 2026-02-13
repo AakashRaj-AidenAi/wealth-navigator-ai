@@ -1,8 +1,8 @@
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { formatCurrency } from '@/lib/currency';
 
 // ─── Escalation threshold ───
-const ESCALATION_AMOUNT = 1000000; // ₹10L — flag large funding
+const ESCALATION_AMOUNT = 1000000; // 10L — flag large funding
 
 // ─── Core: Log to client activity timeline ───
 async function logToTimeline(params: {
@@ -12,9 +12,8 @@ async function logToTimeline(params: {
   description: string;
   activityType?: string;
 }) {
-  await supabase.from('client_activities').insert({
-    client_id: params.clientId,
-    activity_type: (params.activityType || 'note') as any,
+  await api.post(`/clients/${params.clientId}/activities`, {
+    activity_type: params.activityType || 'note',
     title: params.title,
     description: params.description,
     created_by: params.userId,
@@ -33,14 +32,14 @@ async function createFollowUpTask(params: {
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + (params.dueDaysFromNow ?? 1));
 
-  await supabase.from('tasks').insert({
+  await api.post('/tasks', {
     client_id: params.clientId,
     title: params.title,
     description: params.description,
-    priority: (params.priority || 'medium') as any,
-    status: 'todo' as any,
+    priority: params.priority || 'medium',
+    status: 'todo',
     due_date: dueDate.toISOString().split('T')[0],
-    trigger_type: 'system' as any,
+    trigger_type: 'system',
     assigned_to: params.userId,
     created_by: params.userId,
   });
@@ -53,28 +52,17 @@ async function createFundingAlert(params: {
   alertType: string;
   message: string;
 }) {
-  // Avoid duplicates
-  const { data: existing } = await supabase
-    .from('funding_alerts')
-    .select('id')
-    .eq('funding_request_id', params.requestId)
-    .eq('alert_type', params.alertType)
-    .eq('is_resolved', false)
-    .maybeSingle();
-
-  if (!existing) {
-    await supabase.from('funding_alerts').insert({
-      funding_request_id: params.requestId,
-      advisor_id: params.advisorId,
-      alert_type: params.alertType,
-      message: params.message,
-    });
-  }
+  await api.post('/funding/alerts', {
+    funding_request_id: params.requestId,
+    advisor_id: params.advisorId,
+    alert_type: params.alertType,
+    message: params.message,
+  });
 }
 
-// ═══════════════════════════════════════════
+// ===============================================
 //  NOTIFICATION TRIGGERS
-// ═══════════════════════════════════════════
+// ===============================================
 
 /** Trigger: Funding Initiated */
 export async function notifyFundingInitiated(params: {
@@ -101,7 +89,7 @@ export async function notifyFundingInitiated(params: {
       requestId: params.requestId,
       advisorId: params.userId,
       alertType: 'large_amount_escalation',
-      message: `⚠️ Large funding: ${params.clientName} — ${amountStr} (${params.fundingType}). Review and confirm.`,
+      message: `Large funding: ${params.clientName} — ${amountStr} (${params.fundingType}). Review and confirm.`,
     });
   }
 }
@@ -161,7 +149,7 @@ export async function notifyFundingFailed(params: {
     requestId: params.requestId,
     advisorId: params.userId,
     alertType: 'funding_failed',
-    message: `❌ ${params.fundingType} funding of ${amountStr} for ${params.clientName} has failed.`,
+    message: `${params.fundingType} funding of ${amountStr} for ${params.clientName} has failed.`,
   });
 
   // 3. High-priority follow-up task
@@ -192,7 +180,7 @@ export async function notifyFundingStale(params: {
     requestId: params.requestId,
     advisorId: params.userId,
     alertType: 'funding_stale',
-    message: `⏳ ${params.fundingType} funding of ${amountStr} for ${params.clientName} pending for ${params.daysPending} days.`,
+    message: `${params.fundingType} funding of ${amountStr} for ${params.clientName} pending for ${params.daysPending} days.`,
   });
 
   // 2. Client timeline
@@ -232,7 +220,7 @@ export async function notifySettlementMismatch(params: {
     requestId: params.requestId,
     advisorId: params.userId,
     alertType: 'settlement_mismatch',
-    message: `🔴 Settlement mismatch: ${params.clientName} — ${amountStr} (${params.fundingType}) was due ${params.settlementDate} (${params.daysOverdue} day${params.daysOverdue > 1 ? 's' : ''} overdue).`,
+    message: `Settlement mismatch: ${params.clientName} — ${amountStr} (${params.fundingType}) was due ${params.settlementDate} (${params.daysOverdue} day${params.daysOverdue > 1 ? 's' : ''} overdue).`,
   });
 
   // 2. Client timeline

@@ -1,6 +1,5 @@
-import { Bell, Search, ChevronDown, LogOut } from 'lucide-react';
+import { Bot, ChevronDown, LogOut, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,29 +8,57 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { NotificationCenter } from '@/components/NotificationCenter';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 
 const roleLabels: Record<string, string> = {
   wealth_advisor: 'Wealth Advisor',
   compliance_officer: 'Compliance Officer',
-  client: 'Client'
+  client: 'Client',
 };
 
-// Static market data (could be replaced with real API later)
-const marketTicker = [
-  { symbol: 'NIFTY', price: 22456.80, changePercent: 0.45 },
-  { symbol: 'SENSEX', price: 73852.94, changePercent: 0.38 },
-  { symbol: 'GOLD', price: 62450.00, changePercent: -0.12 },
-  { symbol: 'USD/INR', price: 83.12, changePercent: 0.05 },
-];
+const pathMap: Record<string, string> = {
+  '': 'Dashboard',
+  clients: 'Clients',
+  portfolios: 'Portfolios',
+  orders: 'Orders',
+  goals: 'Goals & Planning',
+  cio: 'CIO Desk',
+  compliance: 'Compliance',
+  reports: 'Reports',
+  leads: 'Leads',
+  campaigns: 'Campaigns',
+  communications: 'Communications',
+  'corporate-actions': 'Corporate Actions',
+  funding: 'Funding',
+  business: 'Business',
+  tasks: 'Tasks',
+  settings: 'Settings',
+  admin: 'Admin',
+  copilot: 'AI Copilot',
+  'portfolio-admin': 'Portfolio Admin',
+  messages: 'Messages',
+};
 
-export const Header = () => {
+interface HeaderProps {
+  onToggleChat?: () => void;
+  chatOpen?: boolean;
+}
+
+export const Header = ({ onToggleChat, chatOpen }: HeaderProps = {}) => {
   const { user, role, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleSignOut = async () => {
     await signOut();
@@ -39,106 +66,118 @@ export const Header = () => {
   };
 
   const userInitials = user?.user_metadata?.full_name
-    ? user.user_metadata.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase()
+    ? user.user_metadata.full_name
+        .split(' ')
+        .map((n: string) => n[0])
+        .join('')
+        .toUpperCase()
     : user?.email?.substring(0, 2).toUpperCase() || 'U';
 
   const userName = user?.user_metadata?.full_name || user?.email || 'User';
   const userRole = role ? roleLabels[role] : 'User';
 
-  return (
-    <header className="h-16 border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-30">
-      <div className="flex h-full items-center justify-between px-6">
-        {/* Market Ticker */}
-        <div className="flex items-center gap-6">
-          {marketTicker.map((item) => (
-            <div key={item.symbol} className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">{item.symbol}</span>
-              <span className="text-sm font-medium tabular-nums">{item.price.toLocaleString()}</span>
-              <span
-                className={cn(
-                  'text-xs font-medium tabular-nums',
-                  item.changePercent >= 0 ? 'text-success' : 'text-destructive'
-                )}
-              >
-                {item.changePercent >= 0 ? '+' : ''}{item.changePercent.toFixed(2)}%
-              </span>
-            </div>
-          ))}
-          <div className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
-            <span className="text-xs text-muted-foreground">Live</span>
-          </div>
-        </div>
+  // Build breadcrumb segments from current path
+  const pathSegments = location.pathname.split('/').filter(Boolean);
 
-        {/* Search & Actions */}
-        <div className="flex items-center gap-4">
-          {/* Global Search */}
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search clients, portfolios..."
-              className="pl-9 bg-secondary/50 border-border focus:bg-secondary"
-            />
-            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-              ⌘K
+  const handleCommandPaletteOpen = () => {
+    // Dispatch the keyboard shortcut event to trigger CommandPalette
+    const event = new KeyboardEvent('keydown', {
+      key: 'k',
+      ctrlKey: true,
+      metaKey: true,
+      bubbles: true,
+    });
+    document.dispatchEvent(event);
+  };
+
+  return (
+    <header className="h-14 border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-30">
+      <div className="flex h-full items-center justify-between px-6">
+        {/* Left: Breadcrumbs */}
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              {pathSegments.length === 0 ? (
+                <BreadcrumbPage>Dashboard</BreadcrumbPage>
+              ) : (
+                <BreadcrumbLink asChild>
+                  <Link to="/">Dashboard</Link>
+                </BreadcrumbLink>
+              )}
+            </BreadcrumbItem>
+            {pathSegments.map((segment, index) => {
+              const href = '/' + pathSegments.slice(0, index + 1).join('/');
+              const label = pathMap[segment] || segment.charAt(0).toUpperCase() + segment.slice(1);
+              const isLast = index === pathSegments.length - 1;
+
+              return (
+                <BreadcrumbItem key={href}>
+                  <BreadcrumbSeparator />
+                  {isLast ? (
+                    <BreadcrumbPage>{label}</BreadcrumbPage>
+                  ) : (
+                    <BreadcrumbLink asChild>
+                      <Link to={href}>{label}</Link>
+                    </BreadcrumbLink>
+                  )}
+                </BreadcrumbItem>
+              );
+            })}
+          </BreadcrumbList>
+        </Breadcrumb>
+
+        {/* Right: Actions */}
+        <div className="flex items-center gap-2">
+          {/* Command Palette Trigger */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="hidden sm:flex items-center gap-2 text-muted-foreground h-8 px-3"
+            onClick={handleCommandPaletteOpen}
+          >
+            <Search className="h-3.5 w-3.5" />
+            <span className="text-xs">Search...</span>
+            <kbd className="pointer-events-none ml-2 inline-flex h-5 select-none items-center gap-0.5 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+              <span className="text-xs">Ctrl</span>K
             </kbd>
-          </div>
+          </Button>
+
+          {/* Mobile search button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="sm:hidden"
+            onClick={handleCommandPaletteOpen}
+          >
+            <Search className="h-5 w-5" />
+          </Button>
 
           {/* Theme Toggle */}
           <ThemeToggle />
 
-          {/* Notifications */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="h-5 w-5" />
-                <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground flex items-center justify-center">
-                  3
-                </span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-              <DropdownMenuLabel className="flex items-center justify-between">
-                <span>Notifications</span>
-                <Badge variant="secondary" className="text-xs">3 new</Badge>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <div className="max-h-64 overflow-auto">
-                <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-destructive" />
-                    <span className="text-sm font-medium">Pending Orders</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">Review pending orders - Just now</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-warning" />
-                    <span className="text-sm font-medium">Portfolio Review Due</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">Quarterly review reminder - 1 hour ago</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-success" />
-                    <span className="text-sm font-medium">New Client Added</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">Successfully onboarded - Today</span>
-                </DropdownMenuItem>
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-center text-primary text-sm justify-center">
-                View all notifications
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* AI Copilot Toggle */}
+          {onToggleChat && (
+            <Button
+              variant={chatOpen ? 'default' : 'ghost'}
+              size="icon"
+              onClick={onToggleChat}
+              title="AI Copilot"
+            >
+              <Bot className="h-5 w-5" />
+            </Button>
+          )}
+
+          {/* Notification Center */}
+          <NotificationCenter />
 
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="gap-2 pl-2 pr-3">
                 <div className="h-8 w-8 rounded-full bg-gradient-gold flex items-center justify-center">
-                  <span className="text-sm font-semibold text-primary-foreground">{userInitials}</span>
+                  <span className="text-sm font-semibold text-primary-foreground">
+                    {userInitials}
+                  </span>
                 </div>
                 <div className="text-left hidden sm:block">
                   <p className="text-sm font-medium">{userName}</p>
@@ -150,7 +189,9 @@ export const Header = () => {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate('/settings')}>Profile Settings</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/settings')}>
+                Profile Settings
+              </DropdownMenuItem>
               <DropdownMenuItem>Team Management</DropdownMenuItem>
               <DropdownMenuItem>Preferences</DropdownMenuItem>
               <DropdownMenuSeparator />

@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useState, useCallback } from 'react';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -91,92 +91,25 @@ export const useSentimentAnalysis = () => {
   const fetchLogs = useCallback(async (clientId?: string) => {
     if (!user) return;
     setLoading(true);
-    let query = supabase
-      .from('sentiment_logs')
-      .select('*')
-      .order('analyzed_at', { ascending: false });
-
-    if (clientId) {
-      query = query.eq('client_id', clientId);
+    try {
+      const params: Record<string, string> = {};
+      if (clientId) params.client_id = clientId;
+      const data = await api.get<SentimentLog[]>('/insights/sentiment', params);
+      setLogs(data);
+    } catch (error) {
+      console.error('Error fetching sentiment logs:', error);
+    } finally {
+      setLoading(false);
     }
-
-    const { data, error } = await query;
-    if (data) setLogs(data as unknown as SentimentLog[]);
-    if (error) console.error('Error fetching sentiment logs:', error);
-    setLoading(false);
   }, [user]);
 
   const analyzeClientComms = useCallback(async (clientId: string) => {
     if (!user) return;
 
     try {
-      // Fetch communication logs
-      const { data: comms } = await supabase
-        .from('communication_logs')
-        .select('id, content, subject')
-        .eq('client_id', clientId)
-        .not('content', 'is', null)
-        .order('sent_at', { ascending: false })
-        .limit(50);
-
-      // Fetch client notes
-      const { data: notes } = await supabase
-        .from('client_notes')
-        .select('id, content, title')
-        .eq('client_id', clientId)
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      const sentimentEntries: any[] = [];
-
-      // Analyze communications
-      for (const comm of comms || []) {
-        const text = [comm.subject, comm.content].filter(Boolean).join(' ');
-        if (!text.trim()) continue;
-        const result = analyzeSentiment(text);
-        sentimentEntries.push({
-          client_id: clientId,
-          advisor_id: user.id,
-          source_type: 'communication',
-          source_id: comm.id,
-          source_text: text.substring(0, 500),
-          sentiment: result.sentiment,
-          confidence_score: result.confidence,
-          keywords_matched: result.matchedKeywords,
-          analyzed_at: new Date().toISOString(),
-        });
-      }
-
-      // Analyze notes
-      for (const note of notes || []) {
-        const text = [note.title, note.content].filter(Boolean).join(' ');
-        if (!text.trim()) continue;
-        const result = analyzeSentiment(text);
-        sentimentEntries.push({
-          client_id: clientId,
-          advisor_id: user.id,
-          source_type: 'note',
-          source_id: note.id,
-          source_text: text.substring(0, 500),
-          sentiment: result.sentiment,
-          confidence_score: result.confidence,
-          keywords_matched: result.matchedKeywords,
-          analyzed_at: new Date().toISOString(),
-        });
-      }
-
-      if (sentimentEntries.length === 0) {
-        toast({ title: 'No data', description: 'No communications or notes found to analyze.' });
-        return;
-      }
-
-      // Delete old sentiment logs for this client then insert new
-      await supabase.from('sentiment_logs').delete().eq('client_id', clientId);
-      const { error } = await supabase.from('sentiment_logs').insert(sentimentEntries as any);
-      if (error) throw error;
-
+      const result = await api.post<{ count: number }>(`/insights/sentiment/${clientId}/analyze`);
       await fetchLogs(clientId);
-      toast({ title: 'Sentiment analyzed', description: `${sentimentEntries.length} entries processed for this client.` });
+      toast({ title: 'Sentiment analyzed', description: `${result.count} entries processed for this client.` });
     } catch (err) {
       console.error('Error analyzing sentiment:', err);
       toast({ title: 'Error', description: 'Failed to analyze sentiment', variant: 'destructive' });

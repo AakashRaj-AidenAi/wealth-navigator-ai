@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { toast } from 'sonner';
 
 export interface MeetingSummaryResult {
@@ -116,32 +116,25 @@ export function useMeetingSummary() {
   };
 
   const saveSummary = async (clientId: string, notes: string, summaryData: MeetingSummaryResult) => {
-    const { data: session } = await supabase.auth.getSession();
-    if (!session.session) {
-      toast.error('Please log in');
-      return null;
-    }
-
-    const { data, error } = await supabase.from('ai_meeting_summaries' as any).insert({
-      client_id: clientId,
-      advisor_id: session.session.user.id,
-      raw_notes: notes,
-      summary: summaryData.summary,
-      key_discussion_points: summaryData.key_discussion_points,
-      decisions_made: summaryData.decisions_made,
-      risks_discussed: summaryData.risks_discussed,
-      next_steps: summaryData.next_steps,
-      action_items: summaryData.action_items,
-      follow_up_date: summaryData.follow_up_date,
-    }).select().single();
-
-    if (error) {
+    try {
+      const data = await api.post<any>('/communications/meeting-summaries', {
+        client_id: clientId,
+        raw_notes: notes,
+        summary: summaryData.summary,
+        key_discussion_points: summaryData.key_discussion_points,
+        decisions_made: summaryData.decisions_made,
+        risks_discussed: summaryData.risks_discussed,
+        next_steps: summaryData.next_steps,
+        action_items: summaryData.action_items,
+        follow_up_date: summaryData.follow_up_date,
+      });
+      toast.success('Summary saved!');
+      return data;
+    } catch (error) {
       console.error('Error saving summary:', error);
       toast.error('Failed to save summary');
       return null;
     }
-    toast.success('Summary saved!');
-    return data;
   };
 
   const createTasksFromSummary = async (
@@ -149,52 +142,47 @@ export function useMeetingSummary() {
     clientName: string | undefined,
     summaryData: MeetingSummaryResult
   ) => {
-    const { data: session } = await supabase.auth.getSession();
-    if (!session.session || !summaryData.action_items.length) return;
+    if (!summaryData.action_items.length) return;
 
-    const tasks = summaryData.action_items.map((item) => ({
-      title: item.substring(0, 100),
-      description: `From meeting${clientName ? ` with ${clientName}` : ''}: ${item}`,
-      status: 'todo' as const,
-      priority: 'medium' as const,
-      trigger_type: 'meeting_logged' as const,
-      assigned_to: session.session!.user.id,
-      created_by: session.session!.user.id,
-      client_id: clientId,
-      due_date: summaryData.follow_up_date || null,
-    }));
+    try {
+      const tasks = summaryData.action_items.map((item) => ({
+        title: item.substring(0, 100),
+        description: `From meeting${clientName ? ` with ${clientName}` : ''}: ${item}`,
+        status: 'todo',
+        priority: 'medium',
+        trigger_type: 'meeting_logged',
+        client_id: clientId,
+        due_date: summaryData.follow_up_date || null,
+      }));
 
-    const { error } = await supabase.from('tasks').insert(tasks);
-    if (error) {
+      await api.post('/tasks/batch', { tasks });
+      toast.success(`${tasks.length} tasks created!`);
+    } catch (error) {
       console.error('Error creating tasks:', error);
       toast.error('Failed to create tasks');
-      return;
     }
-    toast.success(`${tasks.length} tasks created!`);
   };
 
   const saveToTimeline = async (clientId: string, summaryData: MeetingSummaryResult) => {
-    const { data: session } = await supabase.auth.getSession();
-    if (!session.session) return;
+    try {
+      // Save as client note
+      await api.post(`/clients/${clientId}/notes`, {
+        title: `AI Meeting Summary - ${new Date().toLocaleDateString()}`,
+        content: `**Summary:**\n${summaryData.summary}\n\n**Key Discussion Points:**\n${summaryData.key_discussion_points.map(d => `- ${d}`).join('\n')}\n\n**Decisions Made:**\n${summaryData.decisions_made.map(d => `- ${d}`).join('\n')}\n\n**Risks Discussed:**\n${summaryData.risks_discussed.map(r => `- ${r}`).join('\n')}\n\n**Action Items:**\n${summaryData.action_items.map(a => `- ${a}`).join('\n')}`,
+      });
 
-    // Save as client note
-    await supabase.from('client_notes').insert({
-      client_id: clientId,
-      title: `AI Meeting Summary - ${new Date().toLocaleDateString()}`,
-      content: `**Summary:**\n${summaryData.summary}\n\n**Key Discussion Points:**\n${summaryData.key_discussion_points.map(d => `- ${d}`).join('\n')}\n\n**Decisions Made:**\n${summaryData.decisions_made.map(d => `- ${d}`).join('\n')}\n\n**Risks Discussed:**\n${summaryData.risks_discussed.map(r => `- ${r}`).join('\n')}\n\n**Action Items:**\n${summaryData.action_items.map(a => `- ${a}`).join('\n')}`,
-      created_by: session.session.user.id,
-    });
+      // Log as activity
+      await api.post(`/clients/${clientId}/activities`, {
+        activity_type: 'meeting',
+        title: 'AI Meeting Summary Generated',
+        description: summaryData.summary,
+      });
 
-    // Log as activity
-    await supabase.from('client_activities').insert({
-      client_id: clientId,
-      activity_type: 'meeting',
-      title: 'AI Meeting Summary Generated',
-      description: summaryData.summary,
-      created_by: session.session.user.id,
-    });
-
-    toast.success('Saved to client timeline!');
+      toast.success('Saved to client timeline!');
+    } catch (error) {
+      console.error('Error saving to timeline:', error);
+      toast.error('Failed to save to timeline');
+    }
   };
 
   const reset = () => setResult(null);

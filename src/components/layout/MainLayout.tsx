@@ -1,41 +1,32 @@
-import { ReactNode, useState, createContext, useContext } from 'react';
+import { ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { CommandPalette } from '@/components/CommandPalette';
+import { ChatSidebar } from '@/components/chat/ChatSidebar';
+import { useChatSidebar } from '@/hooks/useChatSidebar';
 import { cn } from '@/lib/utils';
-
-interface SidebarContextType {
-  collapsed: boolean;
-  setCollapsed: (collapsed: boolean) => void;
-}
-
-const SidebarContext = createContext<SidebarContextType>({
-  collapsed: false,
-  setCollapsed: () => {},
-});
-
-export const useSidebarState = () => useContext(SidebarContext);
 
 interface MainLayoutProps {
   children: ReactNode;
 }
 
 export const MainLayout = ({ children }: MainLayoutProps) => {
-  const [collapsed, setCollapsed] = useState(false);
+  const { isOpen: chatOpen, toggle: toggleChat, close: closeChat } = useChatSidebar();
 
   return (
-    <SidebarContext.Provider value={{ collapsed, setCollapsed }}>
-      <div className="min-h-screen bg-background">
-        <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
-        <div className={cn(
-          "flex flex-col min-h-screen transition-all duration-300",
-          collapsed ? "ml-16" : "ml-64"
-        )}>
-          <Header />
-          <main className="flex-1 p-6">
-            {children}
-          </main>
-        </div>
+    <div className="min-h-screen bg-background">
+      <Sidebar />
+      <div className={cn(
+        "ml-16 flex flex-col min-h-screen transition-all duration-300",
+        chatOpen && "mr-[380px]"
+      )}>
+        <Header onToggleChat={toggleChat} chatOpen={chatOpen} />
+        <main className="flex-1 p-6">
+          {children}
+        </main>
       </div>
-    </SidebarContext.Provider>
+      <ChatSidebar isOpen={chatOpen} onClose={closeChat} />
+      <CommandPalette />
+    </div>
   );
 };
