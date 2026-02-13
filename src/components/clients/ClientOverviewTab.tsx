@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -72,36 +72,29 @@ export const ClientOverviewTab = ({ client, tags, onTagsChange }: ClientOverview
 
   const handleAddTag = async (tag: string) => {
     setAddingTag(true);
-    const { error } = await supabase
-      .from('client_tags')
-      .insert({ client_id: client.id, tag: tag as any });
-
-    if (error) {
+    try {
+      await api.post('/client_tags', { client_id: client.id, tag });
+      onTagsChange();
+    } catch (err) {
       toast({
         title: 'Error',
         description: 'Failed to add tag',
         variant: 'destructive'
       });
-    } else {
-      onTagsChange();
     }
     setAddingTag(false);
   };
 
   const handleRemoveTag = async (tagId: string) => {
-    const { error } = await supabase
-      .from('client_tags')
-      .delete()
-      .eq('id', tagId);
-
-    if (error) {
+    try {
+      await api.delete('/client_tags/' + tagId);
+      onTagsChange();
+    } catch (err) {
       toast({
         title: 'Error',
         description: 'Failed to remove tag',
         variant: 'destructive'
       });
-    } else {
-      onTagsChange();
     }
   };
 

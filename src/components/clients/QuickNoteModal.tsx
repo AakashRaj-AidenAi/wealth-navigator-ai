@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
@@ -30,21 +30,20 @@ export const QuickNoteModal = ({ open, onOpenChange, clientId, onSuccess }: Quic
     }
 
     setSaving(true);
-    const { error } = await supabase.from('client_notes').insert({
-      client_id: clientId,
-      created_by: user.id,
-      title: title.trim() || null,
-      content: content.trim()
-    });
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.post('/client_notes', {
+        client_id: clientId,
+        created_by: user.id,
+        title: title.trim() || null,
+        content: content.trim()
+      });
       toast({ title: 'Note Added', description: 'Your note has been saved.' });
       setTitle('');
       setContent('');
       onOpenChange(false);
       onSuccess?.();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to save note', variant: 'destructive' });
     }
     setSaving(false);
   };

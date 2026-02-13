@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2, FileCheck, BarChart3, TrendingUp, Shield } from 'lucide-react';
 
@@ -67,23 +67,14 @@ export const GenerateReportModal = ({ open, onOpenChange, onSuccess, defaultType
       }
     };
 
-    const { error } = await supabase
-      .from('reports')
-      .insert({
+    try {
+      await api.post('/reports', {
         report_type: reportType,
         title: title.trim(),
         description: description.trim() || null,
         generated_by: user.id,
         data: reportData
       });
-
-    if (error) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive'
-      });
-    } else {
       toast({
         title: 'Report Generated',
         description: `${title} has been generated successfully.`
@@ -91,6 +82,8 @@ export const GenerateReportModal = ({ open, onOpenChange, onSuccess, defaultType
       resetForm();
       onOpenChange(false);
       onSuccess?.();
+    } catch {
+      // API client already shows toast on error
     }
 
     setLoading(false);

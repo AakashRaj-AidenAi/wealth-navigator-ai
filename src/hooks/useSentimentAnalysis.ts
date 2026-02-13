@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { api } from '@/services/api';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -94,8 +94,8 @@ export const useSentimentAnalysis = () => {
     try {
       const params: Record<string, string> = {};
       if (clientId) params.client_id = clientId;
-      const data = await api.get<SentimentLog[]>('/insights/sentiment', params);
-      setLogs(data);
+      const data = await api.get('/insights/sentiment', params);
+      setLogs(extractItems<SentimentLog>(data));
     } catch (error) {
       console.error('Error fetching sentiment logs:', error);
     } finally {

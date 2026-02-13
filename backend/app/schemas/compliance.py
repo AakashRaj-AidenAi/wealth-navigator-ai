@@ -72,3 +72,23 @@ class EngagementScoreResponse(BaseModel):
     campaign_response_rate: float = 0.0
     days_since_last_interaction: Optional[int] = None
     last_calculated_at: Optional[datetime] = None
+
+
+# ---------------------------------------------------------------------------
+# Sentiment Log
+# ---------------------------------------------------------------------------
+
+
+class SentimentLogResponse(BaseModel):
+    """Schema for returning a sentiment log."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    client_id: Optional[uuid.UUID] = None
+    advisor_id: uuid.UUID
+    source: Optional[str] = None
+    content: Optional[str] = None
+    sentiment_score: Optional[float] = None
+    sentiment_label: Optional[str] = None
+    analyzed_at: datetime

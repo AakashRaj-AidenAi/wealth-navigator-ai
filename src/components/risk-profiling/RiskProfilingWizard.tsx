@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
-import { Database } from '@/integrations/supabase/types';
 import {
   Dialog,
   DialogContent,
@@ -23,7 +22,7 @@ import {
 } from './types';
 import { ArrowLeft, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
 
-type RiskCategoryEnum = Database['public']['Enums']['risk_category'];
+type RiskCategoryEnum = RiskCategory;
 
 interface RiskProfilingWizardProps {
   open: boolean;
@@ -117,54 +116,36 @@ export const RiskProfilingWizard = ({
 
     try {
       // Get the current version number
-      const { data: existingProfiles } = await supabase
-        .from('risk_profiles')
-        .select('version')
-        .eq('client_id', clientId)
-        .order('version', { ascending: false })
-        .limit(1);
+      const existingProfiles = await api.get<any[]>('/risk_profiles', { client_id: clientId });
 
-      const newVersion = existingProfiles && existingProfiles.length > 0 
-        ? existingProfiles[0].version + 1 
+      const newVersion = existingProfiles && existingProfiles.length > 0
+        ? Math.max(...existingProfiles.map((p: any) => p.version)) + 1
         : 1;
 
       // Deactivate previous active profiles
-      await supabase
-        .from('risk_profiles')
-        .update({ is_active: false })
-        .eq('client_id', clientId)
-        .eq('is_active', true);
+      await api.post('/risk_profiles/deactivate', { client_id: clientId });
 
       // Create new risk profile
-      const { data: profile, error: profileError } = await supabase
-        .from('risk_profiles')
-        .insert({
-          client_id: clientId,
-          advisor_id: user.id,
-          total_score: totalScore,
-          category: category as RiskCategoryEnum,
-          equity_pct: allocation.equity,
-          debt_pct: allocation.debt,
-          gold_pct: allocation.gold,
-          alternatives_pct: allocation.alternatives,
-          cash_pct: allocation.cash,
-          version: newVersion,
-          is_active: true,
-          signature_data: signatureData,
-          signed_at: new Date().toISOString(),
-          notes: notes || null,
-          ip_address: null,
-          user_agent: navigator.userAgent,
-        })
-        .select()
-        .single();
+      const profile = await api.post<any>('/risk_profiles', {
+        client_id: clientId,
+        advisor_id: user.id,
+        total_score: totalScore,
+        category: category as RiskCategoryEnum,
+        equity_pct: allocation.equity,
+        debt_pct: allocation.debt,
+        gold_pct: allocation.gold,
+        alternatives_pct: allocation.alternatives,
+        cash_pct: allocation.cash,
+        version: newVersion,
+        is_active: true,
+        signature_data: signatureData,
+        signed_at: new Date().toISOString(),
+        notes: notes || null,
+        ip_address: null,
+        user_agent: navigator.userAgent,
+      });
 
-      console.log('Risk profile save result:', { profile, profileError });
-
-      if (profileError) {
-        console.error('Profile save error:', profileError);
-        throw profileError;
-      }
+      console.log('Risk profile save result:', { profile });
 
       if (!profile) {
         throw new Error('No profile returned after insert');
@@ -180,25 +161,15 @@ export const RiskProfilingWizard = ({
         selected_score: answer.selectedScore,
       }));
 
-      const { error: answersError } = await supabase
-        .from('risk_answers')
-        .insert(answerInserts);
-
-      if (answersError) {
-        console.error('Answers save error:', answersError);
-        throw answersError;
-      }
+      await api.post('/risk_answers', answerInserts);
 
       console.log('Risk answers saved successfully');
 
       // Update client's risk_profile field
-      await supabase
-        .from('clients')
-        .update({ risk_profile: category.replace('_', ' ') })
-        .eq('id', clientId);
+      await api.put(`/clients/${clientId}`, { risk_profile: category.replace('_', ' ') });
 
       // Create activity log
-      await supabase.from('client_activities').insert({
+      await api.post('/client_activities', {
         client_id: clientId,
         activity_type: 'document',
         title: 'Risk Profile Assessment Completed',

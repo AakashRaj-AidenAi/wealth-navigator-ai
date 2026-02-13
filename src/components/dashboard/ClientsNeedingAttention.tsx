@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -68,31 +68,10 @@ export const ClientsNeedingAttention = () => {
 
     try {
       if (showToast) setRefreshing(true);
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        setLoading(false);
-        return;
-      }
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/smart-prioritization`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch prioritized clients');
-      }
-
-      const data = await response.json();
+      const data = await api.post<{ prioritized_clients: PrioritizedClient[] }>('/insights/smart-prioritization');
       setClients(data.prioritized_clients || []);
-      
+
       if (showToast) {
         toast.success('Client priorities refreshed');
       }

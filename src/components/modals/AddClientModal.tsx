@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
@@ -49,10 +49,9 @@ export const AddClientModal = ({ open, onOpenChange, onSuccess }: AddClientModal
 
     setLoading(true);
 
-    // Create client
-    const { data: newClient, error } = await supabase
-      .from('clients')
-      .insert({
+    try {
+      // Create client
+      const newClient = await api.post<any>('/clients', {
         advisor_id: user.id,
         client_name: clientName.trim(),
         email: email.trim() || null,
@@ -60,60 +59,51 @@ export const AddClientModal = ({ open, onOpenChange, onSuccess }: AddClientModal
         total_assets: totalAssets ? parseFloat(totalAssets) : 0,
         risk_profile: riskProfile,
         status: 'onboarding' // New clients start in onboarding
-      })
-      .select()
-      .single();
+      });
 
-    if (error) {
+      // Auto-create onboarding activity/task
+      if (newClient) {
+        // Create activity for timeline
+        await api.post('/client_activities', {
+          client_id: newClient.id,
+          created_by: user.id,
+          activity_type: 'meeting',
+          title: 'Client Onboarding',
+          description: `Complete onboarding process for ${clientName.trim()}:\n• Collect KYC documents\n• Risk assessment questionnaire\n• Investment goals discussion\n• Portfolio recommendations`,
+          scheduled_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 1 week from now
+        });
+
+        // Create task in the Tasks module (automation: new_client)
+        await api.post('/tasks', {
+          title: `Onboarding: ${clientName.trim()}`,
+          description: `Complete client onboarding:\n• Collect KYC documents\n• Risk assessment questionnaire\n• Investment goals discussion\n• Portfolio recommendations`,
+          priority: 'high',
+          status: 'todo',
+          due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          client_id: newClient.id,
+          trigger_type: 'new_client',
+          trigger_reference_id: newClient.id,
+          assigned_to: user.id,
+          created_by: user.id,
+        });
+
+        // Add prospect tag automatically for new clients
+        await api.post('/client_tags', {
+          client_id: newClient.id,
+          tag: 'prospect'
+        });
+      }
+
       toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive'
+        title: 'Client Added',
+        description: `${clientName} has been added with an onboarding task.`
       });
-      setLoading(false);
-      return;
+      resetForm();
+      onOpenChange(false);
+      onSuccess?.();
+    } catch {
+      // API client already shows toast on error
     }
-
-    // Auto-create onboarding activity/task
-    if (newClient) {
-      // Create activity for timeline
-      await supabase.from('client_activities').insert({
-        client_id: newClient.id,
-        created_by: user.id,
-        activity_type: 'meeting',
-        title: 'Client Onboarding',
-        description: `Complete onboarding process for ${clientName.trim()}:\n• Collect KYC documents\n• Risk assessment questionnaire\n• Investment goals discussion\n• Portfolio recommendations`,
-        scheduled_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 1 week from now
-      });
-
-      // Create task in the Tasks module (automation: new_client)
-      await supabase.from('tasks').insert({
-        title: `Onboarding: ${clientName.trim()}`,
-        description: `Complete client onboarding:\n• Collect KYC documents\n• Risk assessment questionnaire\n• Investment goals discussion\n• Portfolio recommendations`,
-        priority: 'high',
-        status: 'todo',
-        due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        client_id: newClient.id,
-        trigger_type: 'new_client',
-        trigger_reference_id: newClient.id,
-        assigned_to: user.id,
-        created_by: user.id,
-      });
-
-      // Add prospect tag automatically for new clients
-      await supabase.from('client_tags').insert({
-        client_id: newClient.id,
-        tag: 'prospect'
-      });
-    }
-
-    toast({
-      title: 'Client Added',
-      description: `${clientName} has been added with an onboarding task.`
-    });
-    resetForm();
-    onOpenChange(false);
-    onSuccess?.();
 
     setLoading(false);
   };

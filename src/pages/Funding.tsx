@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from '@/hooks/use-toast';
@@ -277,30 +277,34 @@ const Funding = () => {
   const fetchAll = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const [clientsRes, accountsRes, requestsRes, balancesRes, alertsRes, ordersRes, payoutsRes, payoutTxRes, limitsRes, auditRes, compAlertRes] = await Promise.all([
-      supabase.from('clients').select('id, client_name').eq('advisor_id', user.id).order('client_name'),
-      supabase.from('funding_accounts').select('*, clients(client_name)').eq('advisor_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('funding_requests').select('*, clients(client_name), funding_accounts(bank_name, account_number)').eq('initiated_by', user.id).order('created_at', { ascending: false }),
-      supabase.from('cash_balances').select('*, clients(client_name)').eq('advisor_id', user.id).order('last_updated', { ascending: false }),
-      supabase.from('funding_alerts').select('*').eq('advisor_id', user.id).eq('is_resolved', false).order('created_at', { ascending: false }),
-      supabase.from('orders').select('id, symbol, order_type, total_amount').limit(50).order('created_at', { ascending: false }),
-      supabase.from('payout_requests').select('*, clients(client_name)').eq('advisor_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('payout_transactions').select('*').order('created_at', { ascending: false }),
-      supabase.from('withdrawal_limits').select('*, clients(client_name)').eq('advisor_id', user.id),
-      (supabase as any).from('funding_audit_log').select('*').eq('actor_id', user.id).order('created_at', { ascending: false }).limit(200),
-      (supabase as any).from('payout_compliance_alerts').select('*').eq('is_resolved', false).order('created_at', { ascending: false }),
-    ]);
-    setClients(clientsRes.data || []);
-    setAccounts((accountsRes.data as any) || []);
-    setRequests((requestsRes.data as any) || []);
-    setBalances((balancesRes.data as any) || []);
-    setAlerts((alertsRes.data as any) || []);
-    setOrders((ordersRes.data as any) || []);
-    setPayoutRequests((payoutsRes.data as any) || []);
-    setPayoutTransactions((payoutTxRes.data as any) || []);
-    setWithdrawalLimits((limitsRes.data as any) || []);
-    setPayoutAuditLogs((auditRes.data as any) || []);
-    setComplianceAlerts((compAlertRes.data as any) || []);
+    try {
+      const [clientsResp, accountsResp, requestsResp, balancesResp, alertsResp, ordersResp, payoutsResp, payoutTxResp, limitsResp, auditResp, compAlertResp] = await Promise.all([
+        api.get('/clients', { advisor_id: user.id, fields: 'id,client_name', order: 'client_name' }),
+        api.get('/funding/accounts', { advisor_id: user.id, include: 'clients', order: 'created_at.desc' }),
+        api.get('/funding/requests', { initiated_by: user.id, include: 'clients,funding_accounts', order: 'created_at.desc' }),
+        api.get('/funding/cash-balances', { advisor_id: user.id, include: 'clients', order: 'last_updated.desc' }),
+        api.get('/funding/alerts', { advisor_id: user.id, is_resolved: false, order: 'created_at.desc' }),
+        api.get('/orders', { limit: 50, fields: 'id,symbol,order_type,total_amount', order: 'created_at.desc' }),
+        api.get('/payout-requests', { advisor_id: user.id, include: 'clients', order: 'created_at.desc' }),
+        api.get('/payout-transactions', { order: 'created_at.desc' }),
+        api.get('/withdrawal-limits', { advisor_id: user.id, include: 'clients' }),
+        api.get('/funding/audit-log', { actor_id: user.id, order: 'created_at.desc', limit: 200 }),
+        api.get('/payout-compliance-alerts', { is_resolved: false, order: 'created_at.desc' }),
+      ]);
+      setClients(extractItems<any>(clientsResp));
+      setAccounts(extractItems<any>(accountsResp));
+      setRequests(extractItems<any>(requestsResp));
+      setBalances(extractItems<any>(balancesResp));
+      setAlerts(extractItems<any>(alertsResp));
+      setOrders(extractItems<any>(ordersResp));
+      setPayoutRequests(extractItems<any>(payoutsResp));
+      setPayoutTransactions(extractItems<any>(payoutTxResp));
+      setWithdrawalLimits(extractItems<any>(limitsResp));
+      setPayoutAuditLogs(extractItems<any>(auditResp));
+      setComplianceAlerts(extractItems<any>(compAlertResp));
+    } catch (err) {
+      console.error('Failed to load funding data:', err);
+    }
     setLoading(false);
   }, [user]);
 
@@ -309,13 +313,17 @@ const Funding = () => {
   // ─── Audit Trail Helper ───
   const logAudit = async (entityType: string, entityId: string, action: string, details: any) => {
     if (!user) return;
-    await (supabase as any).from('funding_audit_log').insert({
-      entity_type: entityType,
-      entity_id: entityId,
-      action,
-      actor_id: user.id,
-      details,
-    });
+    try {
+      await api.post('/funding/audit-log', {
+        entity_type: entityType,
+        entity_id: entityId,
+        action,
+        actor_id: user.id,
+        details,
+      });
+    } catch (err) {
+      console.error('Failed to log audit:', err);
+    }
   };
 
   // ─── Compliance Detection ───
@@ -351,33 +359,40 @@ const Funding = () => {
 
   const createComplianceAlerts = async (payoutId: string, flags: { type: string; severity: string; title: string; description: string }[]) => {
     for (const flag of flags) {
-      await (supabase as any).from('payout_compliance_alerts').insert({
-        payout_id: payoutId,
-        alert_type: flag.type,
-        severity: flag.severity,
-        title: flag.title,
-        description: flag.description,
-      });
+      try {
+        await api.post('/payout-compliance-alerts', {
+          payout_id: payoutId,
+          alert_type: flag.type,
+          severity: flag.severity,
+          title: flag.title,
+          description: flag.description,
+        });
+      } catch (err) {
+        console.error('Failed to create compliance alert:', err);
+      }
     }
   };
 
   const resolveComplianceAlert = async (alertId: string) => {
     if (!user) return;
-    await (supabase as any).from('payout_compliance_alerts').update({
-      is_resolved: true,
-      resolved_by: user.id,
-      resolved_at: new Date().toISOString(),
-    }).eq('id', alertId);
-    await logAudit('compliance_alert', alertId, 'resolve_alert', { resolved_by: user.id });
-    fetchAll();
+    try {
+      await api.put('/payout-compliance-alerts/' + alertId, {
+        is_resolved: true,
+        resolved_by: user.id,
+        resolved_at: new Date().toISOString(),
+      });
+      await logAudit('compliance_alert', alertId, 'resolve_alert', { resolved_by: user.id });
+      fetchAll();
+    } catch (err) {
+      console.error('Failed to resolve compliance alert:', err);
+    }
   };
 
   const fetchAIInsights = useCallback(async () => {
     if (!user) return;
     setAiLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('funding-ai', {});
-      if (error) throw error;
+      const data = await api.post<any>('/insights/funding-ai', {});
       setAiInsights(data);
     } catch (e: any) {
       console.error('AI insights error:', e);
@@ -399,13 +414,12 @@ const Funding = () => {
         if (daysLeft <= 1 && daysLeft >= 0) {
           const existing = alerts.find(a => a.funding_request_id === r.id && a.alert_type === 'settlement_approaching');
           if (!existing) {
-            await supabase.from('funding_alerts').insert({
+            api.post('/funding/alerts', {
               funding_request_id: r.id,
               advisor_id: user.id,
               alert_type: 'settlement_approaching',
               message: `Funding for ${(r as any).clients?.client_name || 'client'} (${formatCurrency(Number(r.amount))}) not completed — settlement ${daysLeft === 0 ? 'is today' : 'is tomorrow'}!`,
-            });
-            fetchAll();
+            }).then(() => fetchAll()).catch(err => console.error('Failed to create alert:', err));
           }
         }
       }
@@ -413,8 +427,13 @@ const Funding = () => {
   }, [requests]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchHistory = async (requestId: string) => {
-    const { data } = await supabase.from('funding_status_history').select('*').eq('funding_request_id', requestId).order('created_at', { ascending: true });
-    setRequestHistory(prev => ({ ...prev, [requestId]: (data as any) || [] }));
+    try {
+      const response = await api.get('/funding/status-history', { funding_request_id: requestId, order: 'created_at.asc' });
+      const data = extractItems<any>(response);
+      setRequestHistory(prev => ({ ...prev, [requestId]: data }));
+    } catch (err) {
+      console.error('Failed to load funding history:', err);
+    }
   };
 
   const handleExpandRequest = (id: string) => {
@@ -425,137 +444,161 @@ const Funding = () => {
 
   const handleAddAccount = async () => {
     if (!user || !accountForm.client_id || !accountForm.bank_name || !accountForm.account_number) return;
-    const { error } = await supabase.from('funding_accounts').insert({
-      client_id: accountForm.client_id, bank_name: accountForm.bank_name,
-      account_number: accountForm.account_number, account_type: accountForm.account_type,
-      default_account: accountForm.default_account, advisor_id: user.id,
-    });
-    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Account added' });
-    setShowAccountDialog(false);
-    setAccountForm({ client_id: '', bank_name: '', account_number: '', account_type: 'savings', default_account: false });
-    fetchAll();
+    try {
+      await api.post('/funding/accounts', {
+        client_id: accountForm.client_id, bank_name: accountForm.bank_name,
+        account_number: accountForm.account_number, account_type: accountForm.account_type,
+        default_account: accountForm.default_account, advisor_id: user.id,
+      });
+      toast({ title: 'Account added' });
+      setShowAccountDialog(false);
+      setAccountForm({ client_id: '', bank_name: '', account_number: '', account_type: 'savings', default_account: false });
+      fetchAll();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to add account', variant: 'destructive' });
+    }
   };
 
   const handleInitiateRequest = async () => {
     if (!user || !requestForm.client_id || !requestForm.amount) return;
-    const { data, error } = await supabase.from('funding_requests').insert({
-      client_id: requestForm.client_id,
-      funding_account_id: requestForm.funding_account_id || null,
-      funding_type: requestForm.funding_type,
-      amount: parseFloat(requestForm.amount),
-      trade_reference: requestForm.trade_reference || null,
-      settlement_date: requestForm.settlement_date || null,
-      notes: requestForm.notes || null,
-      initiated_by: user.id,
-      workflow_stage: 'initiated',
-    }).select().single();
-    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-    // Log initial history
-    if (data) {
-      await supabase.from('funding_status_history').insert({
-        funding_request_id: data.id, from_status: null, to_status: 'initiated',
-        changed_by: user.id, note: `${requestForm.funding_type} funding request created for ${formatCurrency(parseFloat(requestForm.amount))}`,
+    try {
+      const data = await api.post<any>('/funding/requests', {
+        client_id: requestForm.client_id,
+        funding_account_id: requestForm.funding_account_id || null,
+        funding_type: requestForm.funding_type,
+        amount: parseFloat(requestForm.amount),
+        trade_reference: requestForm.trade_reference || null,
+        settlement_date: requestForm.settlement_date || null,
+        notes: requestForm.notes || null,
+        initiated_by: user.id,
+        workflow_stage: 'initiated',
       });
-      // Notify: funding initiated
-      const clientName = clients.find(c => c.id === requestForm.client_id)?.client_name || 'Client';
-      await notifyFundingInitiated({
-        requestId: data.id, clientId: requestForm.client_id, clientName,
-        userId: user.id, fundingType: requestForm.funding_type, amount: parseFloat(requestForm.amount),
-      });
+      // Log initial history
+      if (data) {
+        await api.post('/funding/status-history', {
+          funding_request_id: data.id, from_status: null, to_status: 'initiated',
+          changed_by: user.id, note: `${requestForm.funding_type} funding request created for ${formatCurrency(parseFloat(requestForm.amount))}`,
+        });
+        // Notify: funding initiated
+        const clientName = clients.find(c => c.id === requestForm.client_id)?.client_name || 'Client';
+        await notifyFundingInitiated({
+          requestId: data.id, clientId: requestForm.client_id, clientName,
+          userId: user.id, fundingType: requestForm.funding_type, amount: parseFloat(requestForm.amount),
+        });
+      }
+      toast({ title: 'Funding request initiated' });
+      setRequestForm({ client_id: '', funding_account_id: '', funding_type: 'ACH', amount: '', trade_reference: '', settlement_date: '', notes: '' });
+      setActiveTab('history');
+      fetchAll();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to initiate funding request', variant: 'destructive' });
     }
-    toast({ title: 'Funding request initiated' });
-    setRequestForm({ client_id: '', funding_account_id: '', funding_type: 'ACH', amount: '', trade_reference: '', settlement_date: '', notes: '' });
-    setActiveTab('history');
-    fetchAll();
   };
 
   const handleAdvanceStage = async (request: FundingRequest, nextStage: string) => {
     if (!user) return;
     const prevStage = request.workflow_stage;
     const wf = WORKFLOW_STAGES[request.funding_type] || WORKFLOW_STAGES.ACH;
-    const { error } = await supabase.from('funding_requests').update({
-      workflow_stage: nextStage,
-      status: nextStage === 'completed' ? 'Completed' : nextStage === 'failed' ? 'Failed' : 'Pending',
-      stage_updated_at: new Date().toISOString(),
-    }).eq('id', request.id);
-    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-    // Log history
-    await supabase.from('funding_status_history').insert({
-      funding_request_id: request.id, from_status: prevStage, to_status: nextStage,
-      changed_by: user.id, note: `Stage advanced: ${wf.labels[prevStage] || prevStage} → ${wf.labels[nextStage] || nextStage}`,
-    });
-    // Auto-update cash balance on completion + notify
-    const clientName = (request as any).clients?.client_name || 'Client';
-    if (nextStage === 'completed') {
-      await updateCashBalanceOnCompletion(request);
-      await supabase.from('funding_alerts').update({ is_resolved: true, resolved_at: new Date().toISOString() }).eq('funding_request_id', request.id);
-      await notifyFundingCompleted({
-        requestId: request.id, clientId: request.client_id, clientName,
-        userId: user.id, fundingType: request.funding_type, amount: Number(request.amount),
+    try {
+      await api.put('/funding/requests/' + request.id, {
+        workflow_stage: nextStage,
+        status: nextStage === 'completed' ? 'Completed' : nextStage === 'failed' ? 'Failed' : 'Pending',
+        stage_updated_at: new Date().toISOString(),
       });
-    }
-    if (nextStage === 'failed') {
-      await notifyFundingFailed({
-        requestId: request.id, clientId: request.client_id, clientName,
-        userId: user.id, fundingType: request.funding_type, amount: Number(request.amount),
+      // Log history
+      await api.post('/funding/status-history', {
+        funding_request_id: request.id, from_status: prevStage, to_status: nextStage,
+        changed_by: user.id, note: `Stage advanced: ${wf.labels[prevStage] || prevStage} → ${wf.labels[nextStage] || nextStage}`,
       });
+      // Auto-update cash balance on completion + notify
+      const clientName = (request as any).clients?.client_name || 'Client';
+      if (nextStage === 'completed') {
+        await updateCashBalanceOnCompletion(request);
+        await api.put('/funding/alerts/resolve-by-request/' + request.id, { is_resolved: true, resolved_at: new Date().toISOString() });
+        await notifyFundingCompleted({
+          requestId: request.id, clientId: request.client_id, clientName,
+          userId: user.id, fundingType: request.funding_type, amount: Number(request.amount),
+        });
+      }
+      if (nextStage === 'failed') {
+        await notifyFundingFailed({
+          requestId: request.id, clientId: request.client_id, clientName,
+          userId: user.id, fundingType: request.funding_type, amount: Number(request.amount),
+        });
+      }
+      toast({ title: `Advanced to ${wf.labels[nextStage] || nextStage}` });
+      fetchAll();
+      if (expandedRequest === request.id) fetchHistory(request.id);
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to advance stage', variant: 'destructive' });
     }
-    toast({ title: `Advanced to ${wf.labels[nextStage] || nextStage}` });
-    fetchAll();
-    if (expandedRequest === request.id) fetchHistory(request.id);
   };
 
   const updateCashBalanceOnCompletion = async (request: FundingRequest) => {
     if (!user) return;
     const amount = Number(request.amount);
     const existing = balances.find(b => b.client_id === request.client_id);
-    if (existing) {
-      await supabase.from('cash_balances').update({
-        available_cash: Number(existing.available_cash) + amount,
-        last_updated: new Date().toISOString(),
-      }).eq('id', existing.id);
-    } else {
-      await supabase.from('cash_balances').insert({
-        client_id: request.client_id, available_cash: amount,
-        pending_cash: 0, advisor_id: user.id,
-      });
+    try {
+      if (existing) {
+        await api.put('/funding/cash-balances/' + existing.id, {
+          available_cash: Number(existing.available_cash) + amount,
+          last_updated: new Date().toISOString(),
+        });
+      } else {
+        await api.post('/funding/cash-balances', {
+          client_id: request.client_id, available_cash: amount,
+          pending_cash: 0, advisor_id: user.id,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to update cash balance:', err);
     }
   };
 
   const handleDeleteAccount = async (id: string) => {
-    const { error } = await supabase.from('funding_accounts').delete().eq('id', id);
-    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Account removed' });
-    fetchAll();
+    try {
+      await api.delete('/funding/accounts/' + id);
+      toast({ title: 'Account removed' });
+      fetchAll();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to delete account', variant: 'destructive' });
+    }
   };
 
   const handleResolveAlert = async (id: string) => {
-    await supabase.from('funding_alerts').update({ is_resolved: true, resolved_at: new Date().toISOString() }).eq('id', id);
-    fetchAll();
+    try {
+      await api.put('/funding/alerts/' + id, { is_resolved: true, resolved_at: new Date().toISOString() });
+      fetchAll();
+    } catch (err) {
+      console.error('Failed to resolve alert:', err);
+    }
   };
 
   const handleUpsertBalance = async () => {
     if (!user || !balanceForm.client_id) return;
     const existing = balances.find(b => b.client_id === balanceForm.client_id);
-    if (existing) {
-      await supabase.from('cash_balances').update({
-        available_cash: parseFloat(balanceForm.available_cash) || 0,
-        pending_cash: parseFloat(balanceForm.pending_cash) || 0,
-        last_updated: new Date().toISOString(),
-      }).eq('id', existing.id);
-    } else {
-      await supabase.from('cash_balances').insert({
-        client_id: balanceForm.client_id,
-        available_cash: parseFloat(balanceForm.available_cash) || 0,
-        pending_cash: parseFloat(balanceForm.pending_cash) || 0,
-        advisor_id: user.id,
-      });
+    try {
+      if (existing) {
+        await api.put('/funding/cash-balances/' + existing.id, {
+          available_cash: parseFloat(balanceForm.available_cash) || 0,
+          pending_cash: parseFloat(balanceForm.pending_cash) || 0,
+          last_updated: new Date().toISOString(),
+        });
+      } else {
+        await api.post('/funding/cash-balances', {
+          client_id: balanceForm.client_id,
+          available_cash: parseFloat(balanceForm.available_cash) || 0,
+          pending_cash: parseFloat(balanceForm.pending_cash) || 0,
+          advisor_id: user.id,
+        });
+      }
+      toast({ title: 'Cash balance saved' });
+      setShowBalanceDialog(false);
+      setBalanceForm({ client_id: '', available_cash: '', pending_cash: '' });
+      fetchAll();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to save cash balance', variant: 'destructive' });
     }
-    toast({ title: 'Cash balance saved' });
-    setShowBalanceDialog(false);
-    setBalanceForm({ client_id: '', available_cash: '', pending_cash: '' });
-    fetchAll();
   };
 
   // ─── Payout Handlers ───
@@ -612,26 +655,31 @@ const Funding = () => {
     const estDays = payoutForm.payout_type === 'Wire' ? 1 : payoutForm.payout_type === 'ACH' ? 2 : 7;
     const estimatedCompletion = addDays(new Date(), estDays).toISOString();
 
-    const { data: newPayout, error } = await (supabase as any).from('payout_requests').insert({
-      client_id: payoutForm.client_id,
-      advisor_id: user.id,
-      payout_type: payoutForm.payout_type,
-      amount,
-      linked_trade_id: tradeRef,
-      settlement_date: payoutForm.settlement_date || null,
-      notes: payoutForm.notes || null,
-      workflow_stage: 'requested',
-      estimated_completion: estimatedCompletion,
-      requires_dual_approval: requiresDualApproval,
-      compliance_flags: complianceFlags,
-      review_status: complianceFlags.length > 0 ? 'flagged' : 'none',
-      funding_account_id: payoutForm.funding_account_id || null,
-    }).select().single();
-    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
+    let newPayout: any;
+    try {
+      newPayout = await api.post<any>('/payout-requests', {
+        client_id: payoutForm.client_id,
+        advisor_id: user.id,
+        payout_type: payoutForm.payout_type,
+        amount,
+        linked_trade_id: tradeRef,
+        settlement_date: payoutForm.settlement_date || null,
+        notes: payoutForm.notes || null,
+        workflow_stage: 'requested',
+        estimated_completion: estimatedCompletion,
+        requires_dual_approval: requiresDualApproval,
+        compliance_flags: complianceFlags,
+        review_status: complianceFlags.length > 0 ? 'flagged' : 'none',
+        funding_account_id: payoutForm.funding_account_id || null,
+      });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to create payout request', variant: 'destructive' });
+      return;
+    }
 
     if (newPayout && user) {
       // Log payout history
-      await (supabase as any).from('payout_status_history').insert({
+      await api.post('/payout-status-history', {
         payout_id: newPayout.id, from_stage: null, to_stage: 'requested',
         changed_by: user.id, note: `${payoutForm.payout_type} payout requested for ${formatCurrency(amount)}${requiresDualApproval ? ' [DUAL APPROVAL REQUIRED]' : ''}`,
       });
@@ -706,11 +754,15 @@ const Funding = () => {
     if (nextStage === 'completed') updates.completed_at = new Date().toISOString();
     if (nextStage === 'approved') updates.approved_by = user.id;
 
-    const { error } = await (supabase as any).from('payout_requests').update(updates).eq('id', id);
-    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
+    try {
+      await api.put('/payout-requests/' + id, updates);
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to advance payout', variant: 'destructive' });
+      return;
+    }
 
     // Log history
-    await (supabase as any).from('payout_status_history').insert({
+    await api.post('/payout-status-history', {
       payout_id: id, from_stage: prevStage, to_stage: nextStage,
       changed_by: user.id, note: `${wf.labels[prevStage] || prevStage} → ${wf.labels[nextStage] || nextStage}`,
     });
@@ -725,10 +777,14 @@ const Funding = () => {
     if (nextStage === 'completed') {
       const existing = balances.find(b => b.client_id === payout.client_id);
       if (existing) {
-        await supabase.from('cash_balances').update({
-          available_cash: Math.max(0, Number(existing.available_cash) - Number(payout.amount)),
-          last_updated: new Date().toISOString(),
-        }).eq('id', existing.id);
+        try {
+          await api.put('/funding/cash-balances/' + existing.id, {
+            available_cash: Math.max(0, Number(existing.available_cash) - Number(payout.amount)),
+            last_updated: new Date().toISOString(),
+          });
+        } catch (err) {
+          console.error('Failed to deduct cash balance:', err);
+        }
       }
       await logAudit('cash_balance', payout.client_id, 'cash_deducted', { amount: Number(payout.amount), payout_id: id });
     }
@@ -742,26 +798,34 @@ const Funding = () => {
     const payout = payoutRequests.find(p => p.id === id);
     if (!payout || payout.status !== 'Completed') return;
 
-    const { error } = await (supabase as any).from('payout_requests').update({
-      reversed_at: new Date().toISOString(),
-      reversal_reason: reason,
-      workflow_stage: 'reversed',
-      status: 'Failed',
-      stage_updated_at: new Date().toISOString(),
-    }).eq('id', id);
-    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
+    try {
+      await api.put('/payout-requests/' + id, {
+        reversed_at: new Date().toISOString(),
+        reversal_reason: reason,
+        workflow_stage: 'reversed',
+        status: 'Failed',
+        stage_updated_at: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to reverse payout', variant: 'destructive' });
+      return;
+    }
 
     // Restore cash balance
     const existing = balances.find(b => b.client_id === payout.client_id);
     if (existing) {
-      await supabase.from('cash_balances').update({
-        available_cash: Number(existing.available_cash) + Number(payout.amount),
-        last_updated: new Date().toISOString(),
-      }).eq('id', existing.id);
+      try {
+        await api.put('/funding/cash-balances/' + existing.id, {
+          available_cash: Number(existing.available_cash) + Number(payout.amount),
+          last_updated: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.error('Failed to restore cash balance:', err);
+      }
     }
 
     // Log history
-    await (supabase as any).from('payout_status_history').insert({
+    await api.post('/payout-status-history', {
       payout_id: id, from_stage: 'completed', to_stage: 'reversed',
       changed_by: user.id, note: `Reversed: ${reason}`,
     });
@@ -779,10 +843,13 @@ const Funding = () => {
   const handleDeletePayout = async (id: string) => {
     if (!user) return;
     await logAudit('payout', id, 'payout_deleted', {});
-    const { error } = await supabase.from('payout_requests').delete().eq('id', id);
-    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Payout deleted' });
-    fetchAll();
+    try {
+      await api.delete('/payout-requests/' + id);
+      toast({ title: 'Payout deleted' });
+      fetchAll();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to delete payout', variant: 'destructive' });
+    }
   };
 
   const maskAccount = (num: string) => num.length <= 4 ? num : '••••' + num.slice(-4);

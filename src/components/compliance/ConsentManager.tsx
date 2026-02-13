@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { FileCheck, Clock, CheckCircle2, XCircle, Plus, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -49,20 +49,18 @@ export const ConsentManager = () => {
   }, []);
 
   const fetchClients = async () => {
-    const { data } = await supabase.from('clients').select('id, client_name').order('client_name');
-    if (data) setClients(data);
+    try {
+      const data = await api.get('/clients');
+      setClients(extractItems<{ id: string; client_name: string }>(data));
+    } catch { /* API client shows toast */ }
   };
 
   const fetchConsents = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('client_consents')
-      .select('*, clients(client_name)')
-      .order('created_at', { ascending: false });
-
-    if (data) {
-      setConsents(data as Consent[]);
-    }
+    try {
+      const data = await api.get('/client_consents');
+      setConsents(extractItems<Consent>(data));
+    } catch { /* API client shows toast */ }
     setLoading(false);
   };
 
@@ -73,39 +71,34 @@ export const ConsentManager = () => {
     }
 
     setSubmitting(true);
-    const { error } = await supabase.from('client_consents').insert({
-      client_id: selectedClient,
-      consent_type: selectedType as any,
-      status: 'pending' as any,
-      document_version: '1.0'
-    });
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.post('/client_consents', {
+        client_id: selectedClient,
+        consent_type: selectedType,
+        status: 'pending',
+        document_version: '1.0'
+      });
       toast({ title: 'Success', description: 'Consent request created' });
       setAddModalOpen(false);
       setSelectedClient('');
       setSelectedType('');
       fetchConsents();
+    } catch {
+      // API client already shows toast on error
     }
     setSubmitting(false);
   };
 
   const handleMarkAsSigned = async (consentId: string) => {
-    const { error } = await supabase
-      .from('client_consents')
-      .update({ 
-        status: 'signed', 
-        signed_at: new Date().toISOString() 
-      })
-      .eq('id', consentId);
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.put(`/client_consents/${consentId}`, {
+        status: 'signed',
+        signed_at: new Date().toISOString()
+      });
       toast({ title: 'Success', description: 'Consent marked as signed' });
       fetchConsents();
+    } catch {
+      // API client already shows toast on error
     }
   };
 

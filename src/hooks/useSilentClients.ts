@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { api } from '@/services/api';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -25,8 +25,8 @@ export const useSilentClients = () => {
     setLoading(true);
 
     try {
-      const data = await api.get<SilentClient[]>('/insights/silent-clients');
-      setSilentClients(data);
+      const data = await api.get<any>('/insights/silent-clients');
+      setSilentClients(Array.isArray(data) ? data : extractItems<SilentClient>(data));
     } catch (err) {
       console.error('Error detecting silent clients:', err);
     } finally {

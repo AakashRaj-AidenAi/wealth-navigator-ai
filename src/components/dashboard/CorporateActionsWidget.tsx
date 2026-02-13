@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { formatCurrency } from '@/lib/currency';
 import { 
   TrendingUp, 
@@ -59,32 +59,17 @@ export const CorporateActionsWidget = () => {
   const fetchActions = async (refresh = false) => {
     if (refresh) {
       setRefreshing(true);
-      // Trigger data fetch from edge function
-      const { data: session } = await supabase.auth.getSession();
-      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/corporate-actions?action=fetch`, {
-        headers: {
-          'Authorization': `Bearer ${session.session?.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      try {
+        // Trigger data fetch from API
+        await api.get<any>('/insights/corporate-actions', { action: 'fetch' });
+      } catch (err) {
+        // Ignore fetch trigger errors
+      }
     }
 
     try {
-      const { data: session } = await supabase.auth.getSession();
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/corporate-actions?action=list`,
-        {
-          headers: {
-            'Authorization': `Bearer ${session.session?.access_token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setActions(data.actions?.slice(0, 5) || []);
-      }
+      const data = await api.get<{ actions: CorporateAction[] }>('/insights/corporate-actions', { action: 'list' });
+      setActions(data.actions?.slice(0, 5) || []);
     } catch (error) {
       console.error('Error fetching corporate actions:', error);
     } finally {

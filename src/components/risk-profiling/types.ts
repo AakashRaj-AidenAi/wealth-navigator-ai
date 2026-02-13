@@ -1,6 +1,4 @@
-import { Database } from '@/integrations/supabase/types';
-
-export type RiskCategory = Database['public']['Enums']['risk_category'];
+export type RiskCategory = 'very_conservative' | 'conservative' | 'moderate' | 'aggressive' | 'very_aggressive';
 
 export interface RiskQuestion {
   id: string;

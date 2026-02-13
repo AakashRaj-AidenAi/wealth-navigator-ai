@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { BookOpen, Plus, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -60,26 +60,21 @@ export const AdviceRecordsList = () => {
   }, []);
 
   const fetchClients = async () => {
-    const { data } = await supabase.from('clients').select('id, client_name').order('client_name');
-    if (data) setClients(data);
+    try {
+      const data = await api.get('/clients');
+      setClients(extractItems<{ id: string; client_name: string }>(data));
+    } catch { /* API client shows toast */ }
   };
 
   const fetchRecords = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('advice_records')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (data) {
+    try {
+      const data = extractItems<AdviceRecord>(await api.get('/advice_records'));
       // Fetch client names separately
       const clientIds = [...new Set(data.map(r => r.client_id))];
-      const { data: clientData } = await supabase
-        .from('clients')
-        .select('id, client_name')
-        .in('id', clientIds);
-
-      const clientMap = new Map(clientData?.map(c => [c.id, c.client_name]) || []);
+      const clientRes = await api.get('/clients');
+      const clientData = extractItems<{ id: string; client_name: string }>(clientRes);
+      const clientMap = new Map(clientData.map(c => [c.id, c.client_name]));
 
       const enrichedData = data.map(record => ({
         ...record,
@@ -87,7 +82,7 @@ export const AdviceRecordsList = () => {
       }));
 
       setRecords(enrichedData);
-    }
+    } catch { /* API client shows toast */ }
     setLoading(false);
   };
 
@@ -98,40 +93,35 @@ export const AdviceRecordsList = () => {
     }
 
     setSubmitting(true);
-    const { error } = await supabase.from('advice_records').insert({
-      client_id: selectedClient,
-      advisor_id: user?.id,
-      advice_type: adviceType,
-      recommendation,
-      rationale: rationale || null,
-      risk_considerations: riskConsiderations || null
-    });
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.post('/advice_records', {
+        client_id: selectedClient,
+        advisor_id: user?.id,
+        advice_type: adviceType,
+        recommendation,
+        rationale: rationale || null,
+        risk_considerations: riskConsiderations || null
+      });
       toast({ title: 'Success', description: 'Advice record created' });
       setAddModalOpen(false);
       resetForm();
       fetchRecords();
+    } catch {
+      // API client already shows toast on error
     }
     setSubmitting(false);
   };
 
   const handleAcknowledge = async (recordId: string) => {
-    const { error } = await supabase
-      .from('advice_records')
-      .update({ 
-        client_acknowledged: true, 
-        acknowledged_at: new Date().toISOString() 
-      })
-      .eq('id', recordId);
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.put(`/advice_records/${recordId}`, {
+        client_acknowledged: true,
+        acknowledged_at: new Date().toISOString()
+      });
       toast({ title: 'Success', description: 'Advice acknowledged by client' });
       fetchRecords();
+    } catch {
+      // API client already shows toast on error
     }
   };
 

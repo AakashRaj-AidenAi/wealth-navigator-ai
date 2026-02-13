@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSilentClients } from '@/hooks/useSilentClients';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -95,31 +95,12 @@ export const AIInsightsPanel = () => {
   const fetchGrowthEngine = async () => {
     if (!user) return;
     try {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) return;
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-growth-engine`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.session.access_token}`,
-          },
-          body: JSON.stringify({ action: 'full_scan' }),
-        }
-      );
-
-      if (!response.ok) {
-        if (response.status === 429) toast.error('AI rate limit reached.');
-        else if (response.status === 402) toast.error('AI usage limit reached.');
-        return;
-      }
-
-      const result = await response.json();
+      const result = await api.post<GrowthEngineData>('/insights/ai-growth-engine', { action: 'full_scan' });
       setEngineData(result);
-    } catch (error) {
-      console.error('Growth engine error:', error);
+    } catch (error: any) {
+      if (error?.status === 429) toast.error('AI rate limit reached.');
+      else if (error?.status === 402) toast.error('AI usage limit reached.');
+      else console.error('Growth engine error:', error);
     } finally {
       setEngineLoading(false);
     }
@@ -130,49 +111,34 @@ export const AIInsightsPanel = () => {
 
     try {
       const [churnRes, engagementRes, sentimentRes, clientsRes] = await Promise.all([
-        supabase
-          .from('churn_predictions')
-          .select('client_id, churn_risk_percentage, risk_level, risk_factors')
-          .gte('churn_risk_percentage', 40)
-          .order('churn_risk_percentage', { ascending: false })
-          .limit(8),
-        supabase
-          .from('client_engagement_scores')
-          .select('client_id, engagement_score, engagement_level')
-          .gte('engagement_score', 70)
-          .order('engagement_score', { ascending: false })
-          .limit(8),
-        supabase
-          .from('sentiment_logs' as any)
-          .select('client_id, sentiment, source_text')
-          .in('sentiment', ['negative', 'urgent'])
-          .order('analyzed_at', { ascending: false }),
-        supabase
-          .from('clients')
-          .select('id, client_name, total_assets')
-          .eq('advisor_id', user.id),
+        api.get<any>('/churn_predictions', { churn_risk_percentage_gte: '40', _sort: 'churn_risk_percentage', _order: 'desc', _limit: '8' }),
+        api.get<any>('/client_engagement_scores', { engagement_score_gte: '70', _sort: 'engagement_score', _order: 'desc', _limit: '8' }),
+        api.get<any>('/sentiment_logs', { sentiment_in: 'negative,urgent', _sort: 'analyzed_at', _order: 'desc' }),
+        api.get<any>('/clients', { advisor_id: user.id }),
       ]);
 
-      const clients = clientsRes.data || [];
+      const churnData = extractItems<any>(churnRes);
+      const engagementData = extractItems<any>(engagementRes);
+      const sentimentData = extractItems<any>(sentimentRes);
+      const clients = extractItems<any>(clientsRes);
+
       const nameMap = new Map(clients.map((c: any) => [c.id, c.client_name]));
       const assetMap = new Map(clients.map((c: any) => [c.id, Number(c.total_assets) || 0]));
 
-      const sentimentData: any[] = sentimentRes.data || [];
-
-      setChurnClients((churnRes.data || []).map((d: any) => ({
+      setChurnClients((churnData || []).map((d: any) => ({
         ...d,
         risk_factors: d.risk_factors || [],
         client_name: nameMap.get(d.client_id) || 'Unknown',
       })));
 
-      setEngagedClients((engagementRes.data || []).map((d: any) => ({
+      setEngagedClients((engagementData || []).map((d: any) => ({
         ...d,
         client_name: nameMap.get(d.client_id) || 'Unknown',
         total_assets: assetMap.get(d.client_id) || 0,
       })));
 
       const sentMap = new Map<string, { negative: number; urgent: number; latestText: string }>();
-      for (const entry of sentimentData) {
+      for (const entry of (sentimentData || [])) {
         const existing = sentMap.get(entry.client_id) || { negative: 0, urgent: 0, latestText: '' };
         if (entry.sentiment === 'negative') existing.negative++;
         if (entry.sentiment === 'urgent') existing.urgent++;
@@ -193,7 +159,7 @@ export const AIInsightsPanel = () => {
       );
 
       const actions: NextAction[] = [];
-      for (const c of (churnRes.data || []).slice(0, 3)) {
+      for (const c of (churnData || []).slice(0, 3)) {
         actions.push({
           client_id: c.client_id,
           client_name: nameMap.get(c.client_id) || 'Unknown',

@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { AlertTriangle, ChevronRight, User } from 'lucide-react';
 import { churnRiskConfig, getChurnRiskLevel } from '@/hooks/useChurnPredictions';
 
@@ -24,32 +24,36 @@ export const ClientsAtRiskWidget = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetch = async () => {
-      const { data, error } = await supabase
-        .from('churn_predictions')
-        .select('client_id, churn_risk_percentage, risk_level, risk_factors, days_since_interaction')
-        .gte('churn_risk_percentage', 40)
-        .order('churn_risk_percentage', { ascending: false })
-        .limit(5);
+    const fetchData = async () => {
+      try {
+        const dataRes = await api.get('/churn_predictions', {
+          churn_risk_percentage_gte: '40',
+          _sort: 'churn_risk_percentage',
+          _order: 'desc',
+          _limit: '5'
+        });
 
-      if (data && data.length > 0) {
-        // Fetch client names
-        const clientIds = data.map((d: any) => d.client_id);
-        const { data: clientsData } = await supabase
-          .from('clients')
-          .select('id, client_name')
-          .in('id', clientIds);
+        const data = extractItems<any>(dataRes);
 
-        const nameMap = new Map((clientsData ?? []).map(c => [c.id, c.client_name]));
-        setClients(data.map((d: any) => ({
-          ...d,
-          risk_factors: d.risk_factors || [],
-          client_name: nameMap.get(d.client_id) || 'Unknown'
-        })));
+        if (data.length > 0) {
+          // Fetch client names
+          const clientIds = data.map((d: any) => d.client_id);
+          const clientsDataRes = await api.get('/clients', { id_in: clientIds.join(',') });
+          const clientsData = extractItems<any>(clientsDataRes);
+
+          const nameMap = new Map(clientsData.map(c => [c.id, c.client_name]));
+          setClients(data.map((d: any) => ({
+            ...d,
+            risk_factors: d.risk_factors || [],
+            client_name: nameMap.get(d.client_id) || 'Unknown'
+          })));
+        }
+      } catch (err) {
+        console.error('Failed to load at-risk clients:', err);
       }
       setLoading(false);
     };
-    fetch();
+    fetchData();
   }, []);
 
   if (loading) {

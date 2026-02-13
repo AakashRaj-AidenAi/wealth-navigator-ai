@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { AlertTriangle, FileX, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -32,10 +32,7 @@ export const ComplianceAlerts = () => {
     const generatedAlerts: ComplianceAlert[] = [];
 
     // Fetch clients with KYC expiry dates
-    const { data: clients } = await supabase
-      .from('clients')
-      .select('id, client_name, kyc_expiry_date')
-      .not('kyc_expiry_date', 'is', null);
+    const clients = await api.get<any[]>('/clients', { has_kyc_expiry: true });
 
     if (clients) {
       const today = new Date();
@@ -71,13 +68,9 @@ export const ComplianceAlerts = () => {
     }
 
     // Fetch clients missing critical documents
-    const { data: allClients } = await supabase
-      .from('clients')
-      .select('id, client_name');
+    const allClients = await api.get<any[]>('/clients');
 
-    const { data: documents } = await supabase
-      .from('client_documents')
-      .select('client_id, document_type');
+    const documents = await api.get<any[]>('/client_documents');
 
     if (allClients && documents) {
       const requiredDocTypes = ['kyc', 'id_proof', 'address_proof'];
@@ -109,10 +102,7 @@ export const ComplianceAlerts = () => {
     }
 
     // Fetch unsigned consents
-    const { data: pendingConsents } = await supabase
-      .from('client_consents')
-      .select('id, client_id, consent_type, created_at, clients(client_name)')
-      .eq('status', 'pending');
+    const pendingConsents = await api.get<any[]>('/client_consents', { status: 'pending' });
 
     if (pendingConsents) {
       pendingConsents.forEach(consent => {

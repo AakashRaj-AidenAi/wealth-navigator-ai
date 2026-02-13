@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Phone, Mail, Calendar, MessageSquare, FileText, Bell, Clock, Loader2, Trash2, AlertCircle } from 'lucide-react';
@@ -94,13 +94,12 @@ export const ClientActivityTab = ({ clientId }: ClientActivityTabProps) => {
 
   const fetchActivities = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('client_activities')
-      .select('*')
-      .eq('client_id', clientId)
-      .order('created_at', { ascending: false });
-
-    if (data) setActivities(data);
+    try {
+      const data = await api.get('/client_activities', { client_id: clientId });
+      setActivities(extractItems<Activity>(data));
+    } catch (err) {
+      console.error('Failed to load activities:', err);
+    }
     setLoading(false);
   };
 
@@ -115,62 +114,58 @@ export const ClientActivityTab = ({ clientId }: ClientActivityTabProps) => {
     }
 
     setSaving(true);
-    const { error } = await supabase.from('client_activities').insert({
-      client_id: clientId,
-      created_by: user.id,
-      activity_type: form.activity_type as any,
-      title: form.title,
-      description: form.description || null,
-      scheduled_at: form.scheduled_at || null
-    });
-
-    // Automation: Create a follow-up task when meeting is logged
-    if (!error && form.activity_type === 'meeting') {
-      await supabase.from('tasks').insert({
-        title: `Follow-up: ${form.title}`,
-        description: `Follow up after meeting: ${form.title}${form.description ? `\n\nNotes: ${form.description}` : ''}`,
-        priority: 'medium',
-        status: 'todo',
-        due_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 3 days from now
+    try {
+      await api.post('/client_activities', {
         client_id: clientId,
-        trigger_type: 'meeting_logged',
-        assigned_to: user.id,
         created_by: user.id,
+        activity_type: form.activity_type,
+        title: form.title,
+        description: form.description || null,
+        scheduled_at: form.scheduled_at || null
       });
-    }
 
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+      // Automation: Create a follow-up task when meeting is logged
+      if (form.activity_type === 'meeting') {
+        await api.post('/tasks', {
+          title: `Follow-up: ${form.title}`,
+          description: `Follow up after meeting: ${form.title}${form.description ? `\n\nNotes: ${form.description}` : ''}`,
+          priority: 'medium',
+          status: 'todo',
+          due_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 3 days from now
+          client_id: clientId,
+          trigger_type: 'meeting_logged',
+          assigned_to: user.id,
+          created_by: user.id,
+        });
+      }
+
       toast({ title: 'Success', description: 'Activity logged' });
       setModalOpen(false);
       setForm({ activity_type: '', title: '', description: '', scheduled_at: '' });
       fetchActivities();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to log activity', variant: 'destructive' });
     }
     setSaving(false);
   };
 
   const handleMarkComplete = async (activityId: string) => {
-    const { error } = await supabase
-      .from('client_activities')
-      .update({ completed_at: new Date().toISOString() })
-      .eq('id', activityId);
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.put('/client_activities/' + activityId, { completed_at: new Date().toISOString() });
       fetchActivities();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to update activity', variant: 'destructive' });
     }
   };
 
   const handleDelete = async () => {
     if (!activityToDelete) return;
-    const { error } = await supabase.from('client_activities').delete().eq('id', activityToDelete);
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.delete('/client_activities/' + activityToDelete);
       toast({ title: 'Deleted', description: 'Activity removed' });
       fetchActivities();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to delete activity', variant: 'destructive' });
     }
     setDeleteDialogOpen(false);
     setActivityToDelete(null);

@@ -11,8 +11,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_current_active_user, get_db
 from app.models.communication import CommunicationLog, MessageTemplate
+from app.models.user import User
 from app.schemas.communication import (
     CommunicationCreate,
     CommunicationResponse,
@@ -30,11 +31,11 @@ async def list_communications(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ) -> list[CommunicationResponse]:
     """List communication logs for the current advisor."""
     query = select(CommunicationLog).where(
-        CommunicationLog.advisor_id == current_user["id"]
+        CommunicationLog.advisor_id == current_user.id
     )
 
     if client_id:
@@ -54,11 +55,11 @@ async def list_communications(
 async def create_communication(
     payload: CommunicationCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ) -> CommunicationResponse:
     """Create a new communication log entry."""
     log = CommunicationLog(
-        advisor_id=current_user["id"],
+        advisor_id=current_user.id,
         **payload.model_dump(exclude_unset=True),
     )
     db.add(log)
@@ -72,13 +73,13 @@ async def list_templates(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ) -> list[MessageTemplateResponse]:
     """List message templates for the current advisor."""
     query = (
         select(MessageTemplate)
         .where(
-            MessageTemplate.advisor_id == current_user["id"],
+            MessageTemplate.advisor_id == current_user.id,
             MessageTemplate.is_active.is_(True),
         )
         .order_by(MessageTemplate.created_at.desc())

@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { Loader2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -85,9 +85,8 @@ export const EditClientModal = ({ open, onOpenChange, client, onSuccess }: EditC
 
     setLoading(true);
 
-    const { error } = await supabase
-      .from('clients')
-      .update({
+    try {
+      await api.put(`/clients/${client.id}`, {
         client_name: form.client_name.trim(),
         email: form.email.trim() || null,
         phone: form.phone.trim() || null,
@@ -100,22 +99,15 @@ export const EditClientModal = ({ open, onOpenChange, client, onSuccess }: EditC
         address: form.address.trim() || null,
         pan_number: form.pan_number.trim() || null,
         aadhar_number: form.aadhar_number.trim() || null
-      })
-      .eq('id', client.id);
-
-    if (error) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive'
       });
-    } else {
       toast({
         title: 'Client Updated',
         description: `${form.client_name} has been updated successfully.`
       });
       onOpenChange(false);
       onSuccess?.();
+    } catch {
+      // API client already shows toast on error
     }
 
     setLoading(false);

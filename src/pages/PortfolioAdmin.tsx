@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from '@/hooks/use-toast';
@@ -116,18 +116,22 @@ const PortfolioAdmin = () => {
   const fetchAll = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const [clientsRes, portfoliosRes, accountsRes, positionsRes, transactionsRes] = await Promise.all([
-      supabase.from('clients').select('id, client_name').eq('advisor_id', user.id).order('client_name'),
-      supabase.from('portfolio_admin_portfolios').select('*, clients(client_name)').eq('advisor_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('portfolio_admin_accounts').select('*').order('created_at', { ascending: false }),
-      supabase.from('portfolio_admin_positions').select('*').order('created_at', { ascending: false }),
-      supabase.from('portfolio_admin_transactions').select('*').order('trade_date', { ascending: false }),
-    ]);
-    setClients(clientsRes.data || []);
-    setPortfolios((portfoliosRes.data as any) || []);
-    setAccounts((accountsRes.data as any) || []);
-    setPositions((positionsRes.data as any) || []);
-    setTransactions((transactionsRes.data as any) || []);
+    try {
+      const [clientsData, portfoliosData, accountsData, positionsData, transactionsData] = await Promise.all([
+        api.get<ClientOption[]>('/clients', { advisor_id: user.id, fields: 'id,client_name', order: 'client_name' }),
+        api.get<any[]>('/portfolio-admin/portfolios', { advisor_id: user.id, include: 'clients', order: 'created_at.desc' }),
+        api.get<any[]>('/portfolio-admin/accounts', { order: 'created_at.desc' }),
+        api.get<any[]>('/portfolio-admin/positions', { order: 'created_at.desc' }),
+        api.get<any[]>('/portfolio-admin/transactions', { order: 'trade_date.desc' }),
+      ]);
+      setClients(clientsData || []);
+      setPortfolios(portfoliosData || []);
+      setAccounts(accountsData || []);
+      setPositions(positionsData || []);
+      setTransactions(transactionsData || []);
+    } catch (err) {
+      console.error('Failed to load portfolio admin data:', err);
+    }
     setLoading(false);
   }, [user]);
 
@@ -136,23 +140,26 @@ const PortfolioAdmin = () => {
   // ─── Portfolio CRUD ───
   const handleSavePortfolio = async () => {
     if (!user || !portfolioForm.client_id || !portfolioForm.portfolio_name) return;
-    if (editingId) {
-      const { error } = await supabase.from('portfolio_admin_portfolios').update({
-        client_id: portfolioForm.client_id,
-        portfolio_name: portfolioForm.portfolio_name,
-        base_currency: portfolioForm.base_currency,
-      }).eq('id', editingId);
-      if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-      toast({ title: 'Portfolio updated' });
-    } else {
-      const { error } = await supabase.from('portfolio_admin_portfolios').insert({
-        client_id: portfolioForm.client_id,
-        advisor_id: user.id,
-        portfolio_name: portfolioForm.portfolio_name,
-        base_currency: portfolioForm.base_currency,
-      });
-      if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-      toast({ title: 'Portfolio created' });
+    try {
+      if (editingId) {
+        await api.put('/portfolio-admin/portfolios/' + editingId, {
+          client_id: portfolioForm.client_id,
+          portfolio_name: portfolioForm.portfolio_name,
+          base_currency: portfolioForm.base_currency,
+        });
+        toast({ title: 'Portfolio updated' });
+      } else {
+        await api.post('/portfolio-admin/portfolios', {
+          client_id: portfolioForm.client_id,
+          advisor_id: user.id,
+          portfolio_name: portfolioForm.portfolio_name,
+          base_currency: portfolioForm.base_currency,
+        });
+        toast({ title: 'Portfolio created' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to save portfolio', variant: 'destructive' });
+      return;
     }
     setShowPortfolioDialog(false);
     setEditingId(null);
@@ -161,11 +168,14 @@ const PortfolioAdmin = () => {
   };
 
   const handleDeletePortfolio = async (id: string) => {
-    const { error } = await supabase.from('portfolio_admin_portfolios').delete().eq('id', id);
-    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Portfolio deleted' });
-    if (selectedPortfolioId === id) setSelectedPortfolioId(null);
-    fetchAll();
+    try {
+      await api.delete('/portfolio-admin/portfolios/' + id);
+      toast({ title: 'Portfolio deleted' });
+      if (selectedPortfolioId === id) setSelectedPortfolioId(null);
+      fetchAll();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to delete portfolio', variant: 'destructive' });
+    }
   };
 
   const handleEditPortfolio = (p: Portfolio) => {
@@ -177,21 +187,24 @@ const PortfolioAdmin = () => {
   // ─── Account CRUD ───
   const handleSaveAccount = async () => {
     if (!accountForm.portfolio_id) return;
-    if (editingId) {
-      const { error } = await supabase.from('portfolio_admin_accounts').update({
-        account_type: accountForm.account_type,
-        custodian_name: accountForm.custodian_name || null,
-      }).eq('id', editingId);
-      if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-      toast({ title: 'Account updated' });
-    } else {
-      const { error } = await supabase.from('portfolio_admin_accounts').insert({
-        portfolio_id: accountForm.portfolio_id,
-        account_type: accountForm.account_type,
-        custodian_name: accountForm.custodian_name || null,
-      });
-      if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-      toast({ title: 'Account added' });
+    try {
+      if (editingId) {
+        await api.put('/portfolio-admin/accounts/' + editingId, {
+          account_type: accountForm.account_type,
+          custodian_name: accountForm.custodian_name || null,
+        });
+        toast({ title: 'Account updated' });
+      } else {
+        await api.post('/portfolio-admin/accounts', {
+          portfolio_id: accountForm.portfolio_id,
+          account_type: accountForm.account_type,
+          custodian_name: accountForm.custodian_name || null,
+        });
+        toast({ title: 'Account added' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to save account', variant: 'destructive' });
+      return;
     }
     setShowAccountDialog(false);
     setEditingId(null);
@@ -200,31 +213,37 @@ const PortfolioAdmin = () => {
   };
 
   const handleDeleteAccount = async (id: string) => {
-    const { error } = await supabase.from('portfolio_admin_accounts').delete().eq('id', id);
-    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Account deleted' });
-    fetchAll();
+    try {
+      await api.delete('/portfolio-admin/accounts/' + id);
+      toast({ title: 'Account deleted' });
+      fetchAll();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to delete account', variant: 'destructive' });
+    }
   };
 
   // ─── Position CRUD ───
   const handleSavePosition = async () => {
     const pid = positionForm.portfolio_id || selectedPortfolioId;
     if (!pid || !positionForm.security_id) return;
-    const data = {
+    const posData = {
       portfolio_id: pid,
       security_id: positionForm.security_id,
       quantity: Number(positionForm.quantity) || 0,
       average_cost: Number(positionForm.average_cost) || 0,
       current_price: Number(positionForm.current_price) || 0,
     };
-    if (editingId) {
-      const { error } = await supabase.from('portfolio_admin_positions').update(data).eq('id', editingId);
-      if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-      toast({ title: 'Position updated' });
-    } else {
-      const { error } = await supabase.from('portfolio_admin_positions').insert(data);
-      if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-      toast({ title: 'Position added' });
+    try {
+      if (editingId) {
+        await api.put('/portfolio-admin/positions/' + editingId, posData);
+        toast({ title: 'Position updated' });
+      } else {
+        await api.post('/portfolio-admin/positions', posData);
+        toast({ title: 'Position added' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to save position', variant: 'destructive' });
+      return;
     }
     setShowPositionDialog(false);
     setEditingId(null);
@@ -233,17 +252,20 @@ const PortfolioAdmin = () => {
   };
 
   const handleDeletePosition = async (id: string) => {
-    const { error } = await supabase.from('portfolio_admin_positions').delete().eq('id', id);
-    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Position deleted' });
-    fetchAll();
+    try {
+      await api.delete('/portfolio-admin/positions/' + id);
+      toast({ title: 'Position deleted' });
+      fetchAll();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to delete position', variant: 'destructive' });
+    }
   };
 
   // ─── Transaction CRUD ───
   const handleSaveTransaction = async () => {
     const pid = transactionForm.portfolio_id || selectedPortfolioId;
     if (!pid || !transactionForm.security_id) return;
-    const data = {
+    const txData = {
       portfolio_id: pid,
       security_id: transactionForm.security_id,
       transaction_type: transactionForm.transaction_type,
@@ -254,14 +276,17 @@ const PortfolioAdmin = () => {
       settlement_date: transactionForm.settlement_date || null,
       notes: transactionForm.notes || null,
     };
-    if (editingId) {
-      const { error } = await supabase.from('portfolio_admin_transactions').update(data).eq('id', editingId);
-      if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-      toast({ title: 'Transaction updated' });
-    } else {
-      const { error } = await supabase.from('portfolio_admin_transactions').insert(data);
-      if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-      toast({ title: 'Transaction recorded' });
+    try {
+      if (editingId) {
+        await api.put('/portfolio-admin/transactions/' + editingId, txData);
+        toast({ title: 'Transaction updated' });
+      } else {
+        await api.post('/portfolio-admin/transactions', txData);
+        toast({ title: 'Transaction recorded' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to save transaction', variant: 'destructive' });
+      return;
     }
     setShowTransactionDialog(false);
     setEditingId(null);
@@ -270,10 +295,13 @@ const PortfolioAdmin = () => {
   };
 
   const handleDeleteTransaction = async (id: string) => {
-    const { error } = await supabase.from('portfolio_admin_transactions').delete().eq('id', id);
-    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Transaction deleted' });
-    fetchAll();
+    try {
+      await api.delete('/portfolio-admin/transactions/' + id);
+      toast({ title: 'Transaction deleted' });
+      fetchAll();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to delete transaction', variant: 'destructive' });
+    }
   };
 
   // ─── Derived data ───

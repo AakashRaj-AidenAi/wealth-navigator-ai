@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
 import { Loader2, Settings2, AlertTriangle, Wallet, ArrowUpRight } from 'lucide-react';
@@ -68,21 +68,20 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess, onInitiateFunding
   }, [selectedClient, user]);
 
   const fetchClients = async () => {
-    const { data } = await supabase
-      .from('clients')
-      .select('id, client_name')
-      .order('client_name');
-    if (data) setClients(data);
+    try {
+      const data = await api.get('/clients');
+      setClients(extractItems<Client>(data));
+    } catch { /* API client shows toast */ }
   };
 
   const fetchCashBalance = async (clientId: string) => {
     setLoadingBalance(true);
-    const { data } = await supabase
-      .from('cash_balances')
-      .select('available_cash, pending_cash')
-      .eq('client_id', clientId)
-      .maybeSingle();
-    setCashBalance(data ? { available_cash: Number(data.available_cash), pending_cash: Number(data.pending_cash) } : { available_cash: 0, pending_cash: 0 });
+    try {
+      const data = await api.get<CashBalance>(`/cash_balances/${clientId}`);
+      setCashBalance(data ? { available_cash: Number(data.available_cash), pending_cash: Number(data.pending_cash) } : { available_cash: 0, pending_cash: 0 });
+    } catch {
+      setCashBalance({ available_cash: 0, pending_cash: 0 });
+    }
     setLoadingBalance(false);
   };
 
@@ -120,9 +119,8 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess, onInitiateFunding
     const effectivePrice = executionType === 'market' ? (price ? parseFloat(price) : null) : (limitPrice ? parseFloat(limitPrice) : null);
     const totalAmount = effectivePrice && quantity ? effectivePrice * parseFloat(quantity) : null;
 
-    const { error } = await supabase
-      .from('orders')
-      .insert({
+    try {
+      await api.post('/orders', {
         client_id: selectedClient,
         order_type: orderType,
         symbol: symbol.trim().toUpperCase(),
@@ -136,17 +134,15 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess, onInitiateFunding
         expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
       });
 
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
       // Reserve cash for buy orders (move from available to pending)
       if (orderType === 'buy' && totalAmount && totalAmount > 0) {
         const newAvailable = availableCash - totalAmount;
         const newPending = (cashBalance?.pending_cash ?? 0) + totalAmount;
-        await supabase
-          .from('cash_balances')
-          .update({ available_cash: newAvailable, pending_cash: newPending, last_updated: new Date().toISOString() })
-          .eq('client_id', selectedClient);
+        await api.put(`/cash_balances/${selectedClient}`, {
+          available_cash: newAvailable,
+          pending_cash: newPending,
+          last_updated: new Date().toISOString()
+        });
       }
 
       toast({
@@ -156,6 +152,8 @@ export const NewOrderModal = ({ open, onOpenChange, onSuccess, onInitiateFunding
       resetForm();
       onOpenChange(false);
       onSuccess?.();
+    } catch {
+      // API client already shows toast on error
     }
 
     setLoading(false);

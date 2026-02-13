@@ -16,8 +16,8 @@ import { SilentClientsWidget } from '@/components/dashboard/SilentClientsWidget'
 import { NegativeSentimentWidget } from '@/components/dashboard/NegativeSentimentWidget';
 import { AIInsightsPanel } from '@/components/dashboard/AIInsightsPanel';
 import { AIInsightsCenter } from '@/components/ai-growth-engine';
-import { AICopilot } from '@/components/ai/AICopilot';
-import { supabase } from '@/integrations/supabase/client';
+
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
 import { 
@@ -65,80 +65,63 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchStats = async () => {
       if (!user) return;
-      
+
       const today = new Date();
       const todayStr = today.toISOString().split('T')[0];
-      
-      // Parallel fetch all data
-      const [
-        clientsResult,
-        ordersResult,
-        tasksResult,
-        leadsResult,
-        alertsResult,
-        todayOrdersResult
-      ] = await Promise.all([
-        supabase
-          .from('clients')
-          .select('total_assets')
-          .eq('advisor_id', user.id),
-        supabase
-          .from('orders')
-          .select('id')
-          .eq('status', 'pending'),
-        supabase
-          .from('tasks')
-          .select('id')
-          .eq('assigned_to', user.id)
-          .in('status', ['todo', 'in_progress']),
-        supabase
-          .from('leads')
-          .select('id, expected_value')
-          .eq('assigned_to', user.id)
-          .not('stage', 'in', '("closed_won","lost")'),
-        supabase
-          .from('compliance_alerts')
-          .select('id')
-          .eq('is_resolved', false),
-        supabase
-          .from('orders')
-          .select('order_type, total_amount, created_at')
-          .gte('created_at', `${todayStr}T00:00:00`)
-          .lte('created_at', `${todayStr}T23:59:59`)
-      ]);
 
-      const clients = clientsResult.data || [];
-      const orders = ordersResult.data || [];
-      const tasks = tasksResult.data || [];
-      const leads = leadsResult.data || [];
-      const alerts = alertsResult.data || [];
-      const todayOrders = todayOrdersResult.data || [];
+      try {
+        // Parallel fetch all data via API
+        const [
+          clientsRes,
+          ordersRes,
+          tasksRes,
+          leadsRes,
+          alertsRes,
+          todayOrdersRes
+        ] = await Promise.all([
+          api.get('/clients', { advisor_id: user.id, fields: 'total_assets' }),
+          api.get('/orders', { status: 'pending' }),
+          api.get('/tasks', { assigned_to: user.id, status: 'todo,in_progress' }),
+          api.get('/leads', { assigned_to: user.id, exclude_stages: 'closed_won,lost' }),
+          api.get('/compliance/alerts', { is_resolved: false }),
+          api.get('/orders', { created_after: `${todayStr}T00:00:00`, created_before: `${todayStr}T23:59:59` })
+        ]);
 
-      const totalAUM = clients.reduce((sum, c) => sum + (Number(c.total_assets) || 0), 0);
-      
-      // Calculate daily inflow/outflow from today's orders
-      const dailyInflow = todayOrders
-        .filter(o => o.order_type === 'buy')
-        .reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
-      const dailyOutflow = todayOrders
-        .filter(o => o.order_type === 'sell')
-        .reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+        const clients = extractItems<any>(clientsRes);
+        const orders = extractItems<any>(ordersRes);
+        const tasks = extractItems<any>(tasksRes);
+        const leads = extractItems<any>(leadsRes);
+        const alerts = extractItems<any>(alertsRes);
+        const todayOrders = extractItems<any>(todayOrdersRes);
 
-      // Estimate revenue (simplified: 1% of AUM annually / 365)
-      const estimatedDailyRevenue = (totalAUM * 0.01) / 365;
+        const totalAUM = clients.reduce((sum: number, c: any) => sum + (Number(c.total_assets) || 0), 0);
 
-      setStats({
-        totalAUM,
-        totalClients: clients.length,
-        avgClientAUM: clients.length > 0 ? totalAUM / clients.length : 0,
-        pendingOrders: orders.length,
-        pendingTasks: tasks.length,
-        activeLeads: leads.length,
-        alertsCount: alerts.length,
-        dailyInflow,
-        dailyOutflow,
-        revenue: estimatedDailyRevenue
-      });
+        // Calculate daily inflow/outflow from today's orders
+        const dailyInflow = todayOrders
+          .filter((o: any) => o.order_type === 'buy')
+          .reduce((sum: number, o: any) => sum + (Number(o.total_amount) || 0), 0);
+        const dailyOutflow = todayOrders
+          .filter((o: any) => o.order_type === 'sell')
+          .reduce((sum: number, o: any) => sum + (Number(o.total_amount) || 0), 0);
+
+        // Estimate revenue (simplified: 1% of AUM annually / 365)
+        const estimatedDailyRevenue = (totalAUM * 0.01) / 365;
+
+        setStats({
+          totalAUM,
+          totalClients: clients.length,
+          avgClientAUM: clients.length > 0 ? totalAUM / clients.length : 0,
+          pendingOrders: orders.length,
+          pendingTasks: tasks.length,
+          activeLeads: leads.length,
+          alertsCount: alerts.length,
+          dailyInflow,
+          dailyOutflow,
+          revenue: estimatedDailyRevenue
+        });
+      } catch (err) {
+        console.error('Failed to load dashboard stats:', err);
+      }
     };
 
     fetchStats();
@@ -266,10 +249,7 @@ const Dashboard = () => {
           <ActivityFeed />
         </div>
 
-        {/* AI Copilot - Floating Minimized */}
-        <div className="fixed bottom-6 right-6 z-50">
-          <AICopilot defaultMinimized={true} />
-        </div>
+
       </div>
     </MainLayout>
   );

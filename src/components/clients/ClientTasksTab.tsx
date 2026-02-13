@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, CheckCircle2, Circle, Clock, AlertCircle, Loader2, Trash2 } from 'lucide-react';
@@ -80,15 +80,13 @@ export const ClientTasksTab = ({ clientId }: ClientTasksTabProps) => {
 
   const fetchTasks = async () => {
     setLoading(true);
-    // Use activities with specific types as tasks
-    const { data, error } = await supabase
-      .from('client_activities')
-      .select('*')
-      .eq('client_id', clientId)
-      .in('activity_type', ['meeting', 'reminder'])
-      .order('scheduled_at', { ascending: true, nullsFirst: false });
-
-    if (data) setTasks(data);
+    try {
+      // Use activities with specific types as tasks
+      const data = await api.get('/client_activities', { client_id: clientId, activity_type: 'meeting,reminder' });
+      setTasks(extractItems<Activity>(data));
+    } catch (err) {
+      console.error('Failed to load tasks:', err);
+    }
     setLoading(false);
   };
 
@@ -103,50 +101,45 @@ export const ClientTasksTab = ({ clientId }: ClientTasksTabProps) => {
     }
 
     setSaving(true);
-    const { error } = await supabase.from('client_activities').insert({
-      client_id: clientId,
-      created_by: user.id,
-      activity_type: 'meeting',
-      title: form.title,
-      description: form.description || null,
-      scheduled_at: form.scheduled_at || null,
-      metadata: { priority: form.priority }
-    });
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.post('/client_activities', {
+        client_id: clientId,
+        created_by: user.id,
+        activity_type: 'meeting',
+        title: form.title,
+        description: form.description || null,
+        scheduled_at: form.scheduled_at || null,
+        metadata: { priority: form.priority }
+      });
       toast({ title: 'Success', description: 'Task created' });
       setModalOpen(false);
       setForm({ title: '', description: '', scheduled_at: '', priority: 'medium' });
       fetchTasks();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to create task', variant: 'destructive' });
     }
     setSaving(false);
   };
 
   const handleToggleComplete = async (task: Activity) => {
-    const { error } = await supabase
-      .from('client_activities')
-      .update({ 
-        completed_at: task.completed_at ? null : new Date().toISOString() 
-      })
-      .eq('id', task.id);
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.put('/client_activities/' + task.id, {
+        completed_at: task.completed_at ? null : new Date().toISOString()
+      });
       fetchTasks();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to update task', variant: 'destructive' });
     }
   };
 
   const handleDelete = async () => {
     if (!taskToDelete) return;
-    const { error } = await supabase.from('client_activities').delete().eq('id', taskToDelete);
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.delete('/client_activities/' + taskToDelete);
       toast({ title: 'Deleted', description: 'Task removed' });
       fetchTasks();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to delete task', variant: 'destructive' });
     }
     setDeleteDialogOpen(false);
     setTaskToDelete(null);

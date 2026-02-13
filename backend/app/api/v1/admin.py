@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_current_active_user, get_db
 from app.models.compliance import AuditLog
 from app.models.user import User
 
@@ -63,9 +63,9 @@ class UserResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _require_admin(current_user: dict) -> None:
+def _require_admin(current_user: User) -> None:
     """Raise 403 if the current user is not an admin."""
-    if current_user.get("role") != "admin":
+    if current_user.role != "admin":
         raise HTTPException(
             status_code=403, detail="Admin access required"
         )
@@ -81,7 +81,7 @@ async def list_audit_logs(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ) -> list[AuditLogResponse]:
     """List audit log entries. Admin only."""
     _require_admin(current_user)
@@ -102,7 +102,7 @@ async def list_users(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ) -> list[UserResponse]:
     """List all users. Admin only."""
     _require_admin(current_user)

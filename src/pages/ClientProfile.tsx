@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/currency';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -127,15 +127,21 @@ const ClientProfile = () => {
   const sentimentSummary = id ? getClientSentimentSummary(id) : null;
   const fetchClient = async () => {
     if (!id) return;
-    
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('clients')
-      .select('*')
-      .eq('id', id)
-      .single();
 
-    if (error) {
+    setLoading(true);
+    try {
+      const [data, tagsData] = await Promise.all([
+        api.get<Client>('/clients/' + id),
+        api.get<ClientTag[]>('/client-tags', { client_id: id })
+      ]);
+
+      setClient(data);
+
+      if (tagsData) {
+        setTags(tagsData);
+      }
+    } catch (err) {
+      console.error('Failed to load client details:', err);
       toast({
         title: 'Error',
         description: 'Failed to load client details',
@@ -145,18 +151,6 @@ const ClientProfile = () => {
       return;
     }
 
-    setClient(data);
-    
-    // Fetch tags
-    const { data: tagsData } = await supabase
-      .from('client_tags')
-      .select('*')
-      .eq('client_id', id);
-    
-    if (tagsData) {
-      setTags(tagsData);
-    }
-    
     setLoading(false);
   };
 

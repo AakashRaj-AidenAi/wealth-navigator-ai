@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { TaskListView } from '@/components/tasks/TaskListView';
 import { TaskKanbanView } from '@/components/tasks/TaskKanbanView';
 import { QuickAddTask } from '@/components/tasks/QuickAddTask';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Plus, List, Kanban, Search, Calendar, Clock, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -51,26 +51,32 @@ const Tasks = () => {
     if (!user) return;
     setLoading(true);
 
-    let query = supabase
-      .from('tasks')
-      .select('*, clients(client_name)')
-      .eq('assigned_to', user.id)
-      .neq('status', 'cancelled')
-      .order('due_date', { ascending: true, nullsFirst: false });
-
     const today = new Date().toISOString().split('T')[0];
     const weekFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
+    const params: Record<string, string> = {
+      assigned_to: user.id,
+      exclude_status: 'cancelled',
+      order: 'due_date.asc',
+      include: 'clients',
+    };
+
     if (activeFilter === 'today') {
-      query = query.eq('due_date', today);
+      params.due_date = today;
     } else if (activeFilter === 'upcoming') {
-      query = query.gt('due_date', today).lte('due_date', weekFromNow);
+      params.due_date_after = today;
+      params.due_date_before = weekFromNow;
     } else if (activeFilter === 'overdue') {
-      query = query.lt('due_date', today).neq('status', 'done');
+      params.due_date_before = today;
+      params.status_not = 'done';
     }
 
-    const { data, error } = await query;
-    if (data) setTasks(data as Task[]);
+    try {
+      const data = await api.get('/tasks', params);
+      setTasks(extractItems<Task>(data));
+    } catch (err) {
+      console.error('Failed to load tasks:', err);
+    }
     setLoading(false);
   };
 

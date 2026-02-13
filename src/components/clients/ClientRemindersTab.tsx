@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Bell, Gift, Heart, Shield, Calendar, Check, Trash2, Loader2, AlertTriangle } from 'lucide-react';
@@ -98,13 +98,12 @@ export const ClientRemindersTab = ({ clientId, clientName, dateOfBirth, annivers
 
   const fetchReminders = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('client_reminders')
-      .select('*')
-      .eq('client_id', clientId)
-      .order('reminder_date', { ascending: true });
-
-    if (data) setReminders(data);
+    try {
+      const data = await api.get('/client_reminders', { client_id: clientId });
+      setReminders(extractItems<Reminder>(data));
+    } catch (err) {
+      console.error('Failed to load reminders:', err);
+    }
     setLoading(false);
   };
 
@@ -119,49 +118,44 @@ export const ClientRemindersTab = ({ clientId, clientName, dateOfBirth, annivers
     }
 
     setSaving(true);
-    const { error } = await supabase.from('client_reminders').insert({
-      client_id: clientId,
-      created_by: user.id,
-      reminder_type: form.reminder_type as any,
-      title: form.title,
-      description: form.description || null,
-      reminder_date: form.reminder_date,
-      is_recurring: form.is_recurring,
-      recurrence_pattern: form.recurrence_pattern || null
-    });
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.post('/client_reminders', {
+        client_id: clientId,
+        created_by: user.id,
+        reminder_type: form.reminder_type,
+        title: form.title,
+        description: form.description || null,
+        reminder_date: form.reminder_date,
+        is_recurring: form.is_recurring,
+        recurrence_pattern: form.recurrence_pattern || null
+      });
       toast({ title: 'Success', description: 'Reminder created' });
       setModalOpen(false);
       setForm({ reminder_type: '', title: '', description: '', reminder_date: '', is_recurring: false, recurrence_pattern: '' });
       fetchReminders();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to create reminder', variant: 'destructive' });
     }
     setSaving(false);
   };
 
   const handleComplete = async (reminderId: string) => {
-    const { error } = await supabase
-      .from('client_reminders')
-      .update({ is_completed: true, completed_at: new Date().toISOString() })
-      .eq('id', reminderId);
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.put('/client_reminders/' + reminderId, { is_completed: true, completed_at: new Date().toISOString() });
       fetchReminders();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to update reminder', variant: 'destructive' });
     }
   };
 
   const handleDelete = async () => {
     if (!reminderToDelete) return;
-    const { error } = await supabase.from('client_reminders').delete().eq('id', reminderToDelete);
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.delete('/client_reminders/' + reminderToDelete);
       toast({ title: 'Deleted', description: 'Reminder removed' });
       fetchReminders();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to delete reminder', variant: 'destructive' });
     }
     setDeleteDialogOpen(false);
     setReminderToDelete(null);
@@ -169,7 +163,7 @@ export const ClientRemindersTab = ({ clientId, clientName, dateOfBirth, annivers
 
   const createAutoReminder = async (type: 'birthday' | 'anniversary' | 'kyc_expiry', date: string) => {
     if (!user) return;
-    
+
     const titles: Record<string, string> = {
       birthday: `${clientName}'s Birthday`,
       anniversary: `${clientName}'s Anniversary`,
@@ -177,20 +171,19 @@ export const ClientRemindersTab = ({ clientId, clientName, dateOfBirth, annivers
     };
 
     setSaving(true);
-    const { error } = await supabase.from('client_reminders').insert({
-      client_id: clientId,
-      created_by: user.id,
-      reminder_type: type,
-      title: titles[type],
-      reminder_date: date,
-      is_recurring: type !== 'kyc_expiry'
-    });
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.post('/client_reminders', {
+        client_id: clientId,
+        created_by: user.id,
+        reminder_type: type,
+        title: titles[type],
+        reminder_date: date,
+        is_recurring: type !== 'kyc_expiry'
+      });
       toast({ title: 'Success', description: 'Auto reminder created' });
       fetchReminders();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to create reminder', variant: 'destructive' });
     }
     setSaving(false);
   };

@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
@@ -48,11 +48,10 @@ export const QuickAddTask = ({ open, onOpenChange, onSuccess, defaultClientId }:
   }, [open, user, defaultClientId]);
 
   const fetchClients = async () => {
-    const { data } = await supabase
-      .from('clients')
-      .select('id, client_name')
-      .order('client_name');
-    if (data) setClients(data);
+    try {
+      const data = await api.get<Client[]>('/clients');
+      if (data) setClients(data);
+    } catch { /* API client shows toast */ }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -60,25 +59,21 @@ export const QuickAddTask = ({ open, onOpenChange, onSuccess, defaultClientId }:
     if (!user || !form.title.trim()) return;
 
     setSaving(true);
-    const { error } = await supabase.from('tasks').insert({
-      title: form.title.trim(),
-      description: form.description.trim() || null,
-      priority: form.priority,
-      due_date: form.due_date || null,
-      due_time: form.due_time || null,
-      client_id: form.client_id || null,
-      is_recurring: form.is_recurring,
-      recurrence_pattern: form.is_recurring ? form.recurrence_pattern : null,
-      next_occurrence: form.is_recurring && form.due_date ? form.due_date : null,
-      assigned_to: user.id,
-      created_by: user.id,
-      trigger_type: 'manual',
-    });
-
-    setSaving(false);
-    if (error) {
-      toast.error('Failed to create task');
-    } else {
+    try {
+      await api.post('/tasks', {
+        title: form.title.trim(),
+        description: form.description.trim() || null,
+        priority: form.priority,
+        due_date: form.due_date || null,
+        due_time: form.due_time || null,
+        client_id: form.client_id || null,
+        is_recurring: form.is_recurring,
+        recurrence_pattern: form.is_recurring ? form.recurrence_pattern : null,
+        next_occurrence: form.is_recurring && form.due_date ? form.due_date : null,
+        assigned_to: user.id,
+        created_by: user.id,
+        trigger_type: 'manual',
+      });
       toast.success('Task created');
       onOpenChange(false);
       setForm({
@@ -92,7 +87,10 @@ export const QuickAddTask = ({ open, onOpenChange, onSuccess, defaultClientId }:
         recurrence_pattern: '',
       });
       onSuccess();
+    } catch {
+      toast.error('Failed to create task');
     }
+    setSaving(false);
   };
 
   return (

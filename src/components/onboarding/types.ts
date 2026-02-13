@@ -1,6 +1,4 @@
-import { Database } from '@/integrations/supabase/types';
-
-export type ClientType = Database['public']['Enums']['client_type'];
+export type ClientType = 'individual' | 'entity';
 
 export interface DuplicateMatch {
   client_id: string;
@@ -40,12 +38,12 @@ export interface EntityFormData {
   risk_profile: string;
 }
 
-export type FormData = IndividualFormData | EntityFormData;
+export type OnboardingFormData = IndividualFormData | EntityFormData;
 
 export interface OnboardingState {
   step: number;
   clientType: ClientType | null;
-  formData: Partial<FormData>;
+  formData: Partial<OnboardingFormData>;
   documents: File[];
   duplicates: DuplicateMatch[];
   hasHardBlock: boolean;

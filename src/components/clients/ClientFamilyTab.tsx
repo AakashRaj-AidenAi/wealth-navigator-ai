@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Users, User, Trash2, Edit, Loader2 } from 'lucide-react';
@@ -98,15 +98,17 @@ export const ClientFamilyTab = ({ clientId }: ClientFamilyTabProps) => {
 
   const fetchData = async () => {
     setLoading(true);
-    
-    const [familyRes, nomineeRes] = await Promise.all([
-      supabase.from('client_family_members').select('*').eq('client_id', clientId).order('created_at'),
-      supabase.from('client_nominees').select('*').eq('client_id', clientId).order('percentage', { ascending: false })
-    ]);
+    try {
+      const [familyData, nomineeData] = await Promise.all([
+        api.get<FamilyMember[]>('/client_family_members', { client_id: clientId }),
+        api.get<Nominee[]>('/client_nominees', { client_id: clientId })
+      ]);
 
-    if (familyRes.data) setFamilyMembers(familyRes.data);
-    if (nomineeRes.data) setNominees(nomineeRes.data);
-    
+      if (familyData) setFamilyMembers(familyData);
+      if (nomineeData) setNominees(nomineeData);
+    } catch (err) {
+      console.error('Failed to load family data:', err);
+    }
     setLoading(false);
   };
 
@@ -121,23 +123,22 @@ export const ClientFamilyTab = ({ clientId }: ClientFamilyTabProps) => {
     }
 
     setSaving(true);
-    const { error } = await supabase.from('client_family_members').insert({
-      client_id: clientId,
-      name: familyForm.name,
-      relationship: familyForm.relationship,
-      date_of_birth: familyForm.date_of_birth || null,
-      email: familyForm.email || null,
-      phone: familyForm.phone || null,
-      is_nominee: familyForm.is_nominee
-    });
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.post('/client_family_members', {
+        client_id: clientId,
+        name: familyForm.name,
+        relationship: familyForm.relationship,
+        date_of_birth: familyForm.date_of_birth || null,
+        email: familyForm.email || null,
+        phone: familyForm.phone || null,
+        is_nominee: familyForm.is_nominee
+      });
       toast({ title: 'Success', description: 'Family member added' });
       setFamilyModalOpen(false);
       setFamilyForm({ name: '', relationship: '', date_of_birth: '', email: '', phone: '', is_nominee: false });
       fetchData();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to add family member', variant: 'destructive' });
     }
     setSaving(false);
   };
@@ -155,24 +156,23 @@ export const ClientFamilyTab = ({ clientId }: ClientFamilyTabProps) => {
     }
 
     setSaving(true);
-    const { error } = await supabase.from('client_nominees').insert({
-      client_id: clientId,
-      name: nomineeForm.name,
-      relationship: nomineeForm.relationship,
-      percentage: parseFloat(nomineeForm.percentage),
-      date_of_birth: nomineeForm.date_of_birth || null,
-      address: nomineeForm.address || null,
-      id_proof_type: nomineeForm.id_proof_type || null,
-      id_proof_number: nomineeForm.id_proof_number || null
-    });
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.post('/client_nominees', {
+        client_id: clientId,
+        name: nomineeForm.name,
+        relationship: nomineeForm.relationship,
+        percentage: parseFloat(nomineeForm.percentage),
+        date_of_birth: nomineeForm.date_of_birth || null,
+        address: nomineeForm.address || null,
+        id_proof_type: nomineeForm.id_proof_type || null,
+        id_proof_number: nomineeForm.id_proof_number || null
+      });
       toast({ title: 'Success', description: 'Nominee added' });
       setNomineeModalOpen(false);
       setNomineeForm({ name: '', relationship: '', percentage: '', date_of_birth: '', address: '', id_proof_type: '', id_proof_number: '' });
       fetchData();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to add nominee', variant: 'destructive' });
     }
     setSaving(false);
   };
@@ -181,13 +181,12 @@ export const ClientFamilyTab = ({ clientId }: ClientFamilyTabProps) => {
     if (!itemToDelete) return;
 
     const table = itemToDelete.type === 'family' ? 'client_family_members' : 'client_nominees';
-    const { error } = await supabase.from(table).delete().eq('id', itemToDelete.id);
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.delete('/' + table + '/' + itemToDelete.id);
       toast({ title: 'Deleted', description: `${itemToDelete.type === 'family' ? 'Family member' : 'Nominee'} removed` });
       fetchData();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to delete', variant: 'destructive' });
     }
     setDeleteDialogOpen(false);
     setItemToDelete(null);

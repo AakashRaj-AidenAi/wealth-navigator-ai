@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import {
   ArrowRightLeft,
   Calendar,
@@ -55,42 +55,26 @@ export const ActivityFeed = () => {
     const fetchActivities = async () => {
       const allActivities: Activity[] = [];
 
-      // Fetch recent orders
-      const { data: orders } = await supabase
-        .from('orders')
-        .select(`
-          id,
-          order_type,
-          symbol,
-          quantity,
-          status,
-          created_at,
-          clients(client_name)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(5);
+      try {
+        // Fetch recent orders
+        const ordersRes = await api.get('/orders', { _sort: 'created_at', _order: 'desc', _limit: '5' });
+        const orders = extractItems<any>(ordersRes);
 
-      if (orders) {
         orders.forEach(order => {
           allActivities.push({
             id: `order-${order.id}`,
             type: 'trade',
             title: `${order.order_type.toUpperCase()} ${order.symbol}`,
             description: `${order.quantity} shares - ${order.status}`,
-            client: (order.clients as any)?.client_name,
+            client: order.clients?.client_name || order.client_name,
             timestamp: order.created_at
           });
         });
-      }
 
-      // Fetch recent clients
-      const { data: clients } = await supabase
-        .from('clients')
-        .select('id, client_name, created_at')
-        .order('created_at', { ascending: false })
-        .limit(3);
+        // Fetch recent clients
+        const clientsRes = await api.get('/clients', { _sort: 'created_at', _order: 'desc', _limit: '3' });
+        const clients = extractItems<any>(clientsRes);
 
-      if (clients) {
         clients.forEach(client => {
           allActivities.push({
             id: `client-${client.id}`,
@@ -100,41 +84,26 @@ export const ActivityFeed = () => {
             timestamp: client.created_at
           });
         });
-      }
 
-      // Fetch recent goals
-      const { data: goals } = await supabase
-        .from('goals')
-        .select(`
-          id,
-          name,
-          created_at,
-          clients(client_name)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(3);
+        // Fetch recent goals
+        const goalsRes = await api.get('/goals', { _sort: 'created_at', _order: 'desc', _limit: '3' });
+        const goals = extractItems<any>(goalsRes);
 
-      if (goals) {
         goals.forEach(goal => {
           allActivities.push({
             id: `goal-${goal.id}`,
             type: 'goal',
             title: 'Goal Created',
             description: goal.name,
-            client: (goal.clients as any)?.client_name,
+            client: goal.clients?.client_name || goal.client_name,
             timestamp: goal.created_at
           });
         });
-      }
 
-      // Fetch recent reports
-      const { data: reports } = await supabase
-        .from('reports')
-        .select('id, title, report_type, created_at')
-        .order('created_at', { ascending: false })
-        .limit(3);
+        // Fetch recent reports
+        const reportsRes = await api.get('/reports', { _sort: 'created_at', _order: 'desc', _limit: '3' });
+        const reports = extractItems<any>(reportsRes);
 
-      if (reports) {
         reports.forEach(report => {
           allActivities.push({
             id: `report-${report.id}`,
@@ -144,10 +113,12 @@ export const ActivityFeed = () => {
             timestamp: report.created_at
           });
         });
+      } catch (err) {
+        console.error('Failed to load activities:', err);
       }
 
       // Sort by timestamp
-      allActivities.sort((a, b) => 
+      allActivities.sort((a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       );
 

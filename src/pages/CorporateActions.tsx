@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { formatCurrency } from '@/lib/currency';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -86,31 +86,16 @@ const CorporateActions = () => {
   const fetchActions = async (refresh = false) => {
     if (refresh) {
       setRefreshing(true);
-      const { data: session } = await supabase.auth.getSession();
-      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/corporate-actions?action=fetch`, {
-        headers: {
-          'Authorization': `Bearer ${session.session?.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      try {
+        await api.post('/insights/corporate-actions', { action: 'fetch' });
+      } catch (err) {
+        console.error('Error syncing corporate actions:', err);
+      }
     }
 
     try {
-      const { data: session } = await supabase.auth.getSession();
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/corporate-actions?action=list`,
-        {
-          headers: {
-            'Authorization': `Bearer ${session.session?.access_token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setActions(data.actions || []);
-      }
+      const data = await api.get<{ actions: CorporateAction[] }>('/corporate-actions', { action: 'list' });
+      setActions(data?.actions || []);
     } catch (error) {
       console.error('Error fetching corporate actions:', error);
       toast({

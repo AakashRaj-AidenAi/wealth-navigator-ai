@@ -189,7 +189,7 @@ class ClientActivity(BaseMixin, Base):
     )  # call | meeting | email | note | task | document | login | portfolio_update
     title: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    extra_data: Mapped[Optional[dict]] = mapped_column("metadata", JSON, nullable=True)
     activity_date: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -244,7 +244,7 @@ class ClientFamilyMember(BaseMixin, Base):
         UUID(as_uuid=True), ForeignKey("clients.id"), nullable=False
     )
     name: Mapped[str] = mapped_column(String, nullable=False)
-    relationship: Mapped[str] = mapped_column(String, nullable=False)
+    relation_type: Mapped[str] = mapped_column("relationship", String, nullable=False)
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -271,7 +271,7 @@ class ClientNominee(BaseMixin, Base):
         UUID(as_uuid=True), ForeignKey("clients.id"), nullable=False
     )
     name: Mapped[str] = mapped_column(String, nullable=False)
-    relationship: Mapped[str] = mapped_column(String, nullable=False)
+    relation_type: Mapped[str] = mapped_column("relationship", String, nullable=False)
     percentage: Mapped[float] = mapped_column(Float, nullable=False)
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     id_proof_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)

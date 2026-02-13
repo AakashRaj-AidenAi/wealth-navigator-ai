@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
 import { format } from 'date-fns';
@@ -181,25 +181,25 @@ export const ClientPayoutsTab = ({ clientId }: ClientPayoutsTabProps) => {
   const fetchPayouts = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const { data } = await (supabase as any)
-      .from('payout_requests')
-      .select('*')
-      .eq('client_id', clientId)
-      .eq('advisor_id', user.id)
-      .order('created_at', { ascending: false });
-    setPayouts(data || []);
+    try {
+      const data = await api.get<PayoutRecord[]>('/payout_requests', { client_id: clientId, advisor_id: user.id });
+      setPayouts(data || []);
+    } catch (err) {
+      console.error('Failed to load payouts:', err);
+      setPayouts([]);
+    }
     setLoading(false);
   }, [clientId, user]);
 
   useEffect(() => { fetchPayouts(); }, [fetchPayouts]);
 
   const fetchHistory = async (payoutId: string) => {
-    const { data } = await (supabase as any)
-      .from('payout_status_history')
-      .select('*')
-      .eq('payout_id', payoutId)
-      .order('created_at', { ascending: true });
-    setHistory(prev => ({ ...prev, [payoutId]: data || [] }));
+    try {
+      const data = await api.get<PayoutHistoryEntry[]>('/payout_status_history', { payout_id: payoutId });
+      setHistory(prev => ({ ...prev, [payoutId]: data || [] }));
+    } catch (err) {
+      console.error('Failed to load payout history:', err);
+    }
   };
 
   const handleExpand = (id: string) => {

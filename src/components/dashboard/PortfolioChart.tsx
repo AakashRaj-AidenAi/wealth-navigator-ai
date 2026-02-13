@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/lib/currency';
 
@@ -25,32 +25,36 @@ export const PortfolioChart = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: clients } = await supabase
-        .from('clients')
-        .select('risk_profile, total_assets');
+      try {
+        const clientsRes = await api.get('/clients');
+        const clients = extractItems<any>(clientsRes);
 
-      if (clients && clients.length > 0) {
-        const total = clients.reduce((sum, c) => sum + (Number(c.total_assets) || 0), 0);
-        setTotalAUM(total);
+        if (clients.length > 0) {
+          const total = clients.reduce((sum, c) => sum + (Number(c.total_assets) || 0), 0);
+          setTotalAUM(total);
 
-        // Group by risk profile
-        const riskGroups = clients.reduce((acc, client) => {
-          const risk = client.risk_profile || 'moderate';
-          acc[risk] = (acc[risk] || 0) + (Number(client.total_assets) || 0);
-          return acc;
-        }, {} as Record<string, number>);
+          // Group by risk profile
+          const riskGroups = clients.reduce((acc, client) => {
+            const risk = client.risk_profile || 'moderate';
+            acc[risk] = (acc[risk] || 0) + (Number(client.total_assets) || 0);
+            return acc;
+          }, {} as Record<string, number>);
 
-        const allocationData = Object.entries(riskGroups).map(([name, value]) => ({
-          name: name.charAt(0).toUpperCase() + name.slice(1),
-          value: Math.round((value / total) * 100)
-        }));
+          const allocationData = Object.entries(riskGroups).map(([name, value]) => ({
+            name: name.charAt(0).toUpperCase() + name.slice(1),
+            value: Math.round((value / total) * 100)
+          }));
 
-        setAllocation(allocationData);
-      } else {
-        // Default empty state
-        setAllocation([
-          { name: 'No Data', value: 100 }
-        ]);
+          setAllocation(allocationData);
+        } else {
+          // Default empty state
+          setAllocation([
+            { name: 'No Data', value: 100 }
+          ]);
+        }
+      } catch (err) {
+        console.error('Failed to load portfolio data:', err);
+        setAllocation([{ name: 'No Data', value: 100 }]);
       }
       setLoading(false);
     };

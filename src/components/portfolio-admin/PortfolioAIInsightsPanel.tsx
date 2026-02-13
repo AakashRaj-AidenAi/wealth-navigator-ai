@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import {
@@ -67,11 +67,7 @@ export const PortfolioAIInsightsPanel = () => {
   const fetchInsights = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('portfolio-ai', {
-        body: { type: 'full_analysis' },
-      });
-
-      if (error) throw error;
+      const data = await api.post<any>('/insights/portfolio-ai', { type: 'full_analysis' });
 
       if (data?.error) {
         toast({ title: 'AI Error', description: data.error, variant: 'destructive' });

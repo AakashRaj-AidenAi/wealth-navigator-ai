@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -71,42 +71,14 @@ export const AIDraftMessageModal = ({
     setLoading(true);
     setPersonalization(null);
     try {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) {
-        toast.error('Please log in to use AI features');
-        return;
-      }
+      const data = await api.post<any>('/insights/ai-growth-engine', {
+        action: 'draft_message',
+        client_id: clientId,
+        context: { type: messageType, data: context }
+      });
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-growth-engine`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.session.access_token}`,
-          },
-          body: JSON.stringify({
-            action: 'draft_message',
-            client_id: clientId,
-            context: { type: messageType, data: context }
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        if (response.status === 429) {
-          toast.error('AI rate limit reached. Try again later.');
-        } else if (response.status === 402) {
-          toast.error('AI credits exhausted. Please add funds.');
-        } else {
-          toast.error('Failed to generate draft');
-        }
-        return;
-      }
-
-      const data = await response.json();
-      setDraft(data.draft || '');
-      if (data.personalization_used) {
+      setDraft(data?.draft || '');
+      if (data?.personalization_used) {
         setPersonalization(data.personalization_used);
       }
       toast.success('AI draft generated with personalized context!');
@@ -126,36 +98,26 @@ export const AIDraftMessageModal = ({
   const handleLogToTimeline = async () => {
     setLoggingTimeline(true);
     try {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) {
-        toast.error('Please log in');
-        return;
-      }
-
       const subject = draft.match(/Subject:\s*(.+)/)?.[1] || 'AI Draft Message';
       const body = draft.replace(/Subject:.*\n\n?/, '');
 
       // Log to communication_logs
-      const { error: logError } = await supabase.from('communication_logs').insert({
+      await api.post('/communication_logs', {
         client_id: clientId,
         communication_type: 'email',
         direction: 'outbound',
         subject,
         content: body,
-        sent_by: session.session.user.id,
         status: 'draft',
         metadata: { source: 'ai_draft', message_type: messageType },
       });
 
-      if (logError) throw logError;
-
       // Log activity
-      await supabase.from('client_activities').insert({
+      await api.post('/client_activities', {
         client_id: clientId,
         activity_type: 'email',
         title: `AI Draft: ${subject}`,
         description: `AI-generated ${MESSAGE_TYPES.find(t => t.value === messageType)?.label || messageType} draft created`,
-        created_by: session.session.user.id,
       });
 
       toast.success('Draft saved to timeline & communication history');

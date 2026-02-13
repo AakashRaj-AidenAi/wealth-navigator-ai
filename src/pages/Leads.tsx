@@ -3,10 +3,10 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { 
+import {
   Plus, Search, LayoutGrid, List, BarChart3, RefreshCw
 } from 'lucide-react';
 import { EnhancedLeadPipeline } from '@/components/leads/EnhancedLeadPipeline';
@@ -16,10 +16,25 @@ import { LeadQuickActionsDrawer } from '@/components/leads/LeadQuickActionsDrawe
 import { PipelineAnalytics } from '@/components/leads/PipelineAnalytics';
 import { RevenueForecast } from '@/components/leads/RevenueForecast';
 import { formatCurrencyShort } from '@/lib/currency';
-import type { Database } from '@/integrations/supabase/types';
 
-type Lead = Database['public']['Tables']['leads']['Row'];
-type LeadStage = Database['public']['Enums']['lead_stage'];
+interface Lead {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  source: string | null;
+  stage: LeadStage;
+  assigned_to: string | null;
+  expected_value: number | null;
+  probability: number | null;
+  last_activity_at: string | null;
+  converted_client_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+type LeadStage = 'new' | 'contacted' | 'meeting' | 'proposal' | 'closed_won' | 'lost';
 
 // Stage-based automation rules
 const stageAutomationRules: Record<LeadStage, { taskTitle: string; taskDescription: string; dueDays: number; priority: 'low' | 'medium' | 'high' | 'urgent' } | null> = {
@@ -71,20 +86,19 @@ const Leads = () => {
     if (showLoading) setLoading(true);
     else setRefreshing(true);
 
-    const { data, error } = await supabase
-      .from('leads')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (data) setLeads(data);
-    if (error) {
+    try {
+      const response = await api.get('/leads', { order: 'created_at.desc' });
+      const data = extractItems<Lead>(response);
+      setLeads(data);
+    } catch (err) {
+      console.error('Failed to fetch leads:', err);
       toast({
         title: 'Error',
         description: 'Failed to fetch leads',
         variant: 'destructive'
       });
     }
-    
+
     setLoading(false);
     setRefreshing(false);
   };
@@ -104,22 +118,68 @@ const Leads = () => {
     }
 
     // Optimistic update
-    setLeads(prev => prev.map(l => 
+    setLeads(prev => prev.map(l =>
       l.id === leadId ? { ...l, stage: newStage } : l
     ));
 
-    // Update lead stage (trigger will log history)
-    const { data: updatedLead, error } = await supabase
-      .from('leads')
-      .update({ 
+    try {
+      // Update lead stage (trigger will log history)
+      const updatedLead = await api.put<any>('/leads/' + leadId, {
         stage: newStage,
         last_activity_at: new Date().toISOString()
-      })
-      .eq('id', leadId)
-      .select('*, clients!leads_converted_client_id_fkey(id, client_code, client_name)')
-      .single();
+      });
 
-    if (error) {
+      // Log activity for non-closed stages
+      if (newStage !== 'closed_won' && newStage !== 'lost') {
+        await api.post('/lead-activities', {
+          lead_id: leadId,
+          activity_type: 'stage_change',
+          title: `Stage changed to ${newStage.replace('_', ' ')}`,
+          description: `Lead moved from ${lead.stage.replace('_', ' ')} to ${newStage.replace('_', ' ')}`,
+          created_by: user.id
+        });
+
+        // Auto-create task based on stage automation rules
+        const automationRule = stageAutomationRules[newStage];
+        if (automationRule) {
+          await api.post('/tasks', {
+            title: `${automationRule.taskTitle} - ${lead.name}`,
+            description: automationRule.taskDescription,
+            priority: automationRule.priority,
+            status: 'todo',
+            due_date: new Date(Date.now() + automationRule.dueDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            trigger_type: 'new_lead',
+            assigned_to: user.id,
+            created_by: user.id
+          });
+        }
+      }
+
+      // Refresh leads to get updated data
+      await fetchLeads(false);
+
+      // Show appropriate toast
+      if (newStage === 'closed_won' && updatedLead?.converted_client_id) {
+        const clientData = updatedLead.clients as { id: string; client_code: string; client_name: string } | null;
+        toast({
+          title: 'Lead Successfully Converted to Client',
+          description: clientData?.client_code
+            ? `${lead.name} is now Client ${clientData.client_code}. Onboarding tasks have been created automatically.`
+            : `${lead.name} has been converted to a client. Onboarding tasks have been created automatically.`,
+        });
+      } else if (newStage === 'lost') {
+        toast({
+          title: 'Lead Closed',
+          description: `${lead.name} marked as lost`
+        });
+      } else {
+        toast({
+          title: 'Stage Updated',
+          description: `${lead.name} moved to ${newStage.replace('_', ' ')}`
+        });
+      }
+    } catch (err) {
+      console.error('Failed to update lead stage:', err);
       toast({
         title: 'Error',
         description: 'Failed to update lead stage',
@@ -127,57 +187,6 @@ const Leads = () => {
       });
       // Revert optimistic update
       fetchLeads(false);
-      return;
-    }
-
-    // Log activity for non-closed stages
-    if (newStage !== 'closed_won' && newStage !== 'lost') {
-      await supabase.from('lead_activities').insert({
-        lead_id: leadId,
-        activity_type: 'stage_change',
-        title: `Stage changed to ${newStage.replace('_', ' ')}`,
-        description: `Lead moved from ${lead.stage.replace('_', ' ')} to ${newStage.replace('_', ' ')}`,
-        created_by: user.id
-      });
-
-      // Auto-create task based on stage automation rules
-      const automationRule = stageAutomationRules[newStage];
-      if (automationRule) {
-        await supabase.from('tasks').insert({
-          title: `${automationRule.taskTitle} - ${lead.name}`,
-          description: automationRule.taskDescription,
-          priority: automationRule.priority,
-          status: 'todo',
-          due_date: new Date(Date.now() + automationRule.dueDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          trigger_type: 'new_lead',
-          assigned_to: user.id,
-          created_by: user.id
-        });
-      }
-    }
-
-    // Refresh leads to get updated data
-    await fetchLeads(false);
-
-    // Show appropriate toast
-    if (newStage === 'closed_won' && updatedLead?.converted_client_id) {
-      const clientData = updatedLead.clients as { id: string; client_code: string; client_name: string } | null;
-      toast({
-        title: '🎉 Lead Successfully Converted to Client',
-        description: clientData?.client_code 
-          ? `${lead.name} is now Client ${clientData.client_code}. Onboarding tasks have been created automatically.`
-          : `${lead.name} has been converted to a client. Onboarding tasks have been created automatically.`,
-      });
-    } else if (newStage === 'lost') {
-      toast({
-        title: 'Lead Closed',
-        description: `${lead.name} marked as lost`
-      });
-    } else {
-      toast({
-        title: 'Stage Updated',
-        description: `${lead.name} moved to ${newStage.replace('_', ' ')}`
-      });
     }
   }, [leads, user, toast]);
 

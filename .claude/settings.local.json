@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la \"c:\\\\aidenai\\\\WealthManagement\\\\wealth-navigator-ai\\\\src\\\\integrations\"\" 2>&1 || echo \"Directory not found or error \")",
+      "Bash(npm run build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(ls:*)",
+      "Bash(dir:*)",
+      "Bash(pushd:*)"
+    ]
+  }
+}

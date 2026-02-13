@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Target, Plus, TrendingUp, Calendar, CheckCircle2 } from 'lucide-react';
 import { NewGoalModal } from '@/components/modals/NewGoalModal';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
 interface Goal {
@@ -28,13 +28,12 @@ const Goals = () => {
 
   const fetchGoals = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('goals')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (data) {
+    try {
+      const response = await api.get('/goals', { order: 'created_at.desc' });
+      const data = extractItems<Goal>(response);
       setGoals(data);
+    } catch (err) {
+      console.error('Failed to load goals:', err);
     }
     setLoading(false);
   };

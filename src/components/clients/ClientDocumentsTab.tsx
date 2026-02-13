@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, FileText, Download, Trash2, Upload, Loader2, File, FileCheck, AlertTriangle } from 'lucide-react';
@@ -91,13 +91,12 @@ export const ClientDocumentsTab = ({ clientId }: ClientDocumentsTabProps) => {
 
   const fetchDocuments = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('client_documents')
-      .select('*')
-      .eq('client_id', clientId)
-      .order('created_at', { ascending: false });
-
-    if (data) setDocuments(data);
+    try {
+      const data = await api.get('/client_documents', { client_id: clientId });
+      setDocuments(extractItems<Document>(data));
+    } catch (err) {
+      console.error('Failed to load documents:', err);
+    }
     setLoading(false);
   };
 
@@ -125,28 +124,13 @@ export const ClientDocumentsTab = ({ clientId }: ClientDocumentsTabProps) => {
     setUploading(true);
 
     try {
-      const fileExt = selectedFile.name.split('.').pop();
-      const filePath = `${clientId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('client-documents')
-        .upload(filePath, selectedFile);
-
-      if (uploadError) throw uploadError;
-
-      const { error: dbError } = await supabase.from('client_documents').insert({
-        client_id: clientId,
-        uploaded_by: user.id,
-        document_type: form.document_type as any,
-        file_name: selectedFile.name,
-        file_path: filePath,
-        file_size: selectedFile.size,
-        mime_type: selectedFile.type,
-        expiry_date: form.expiry_date || null,
-        notes: form.notes || null
-      });
-
-      if (dbError) throw dbError;
+      // TODO: Replace with proper multipart upload endpoint when available
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('document_type', form.document_type);
+      formData.append('expiry_date', form.expiry_date || '');
+      formData.append('notes', form.notes || '');
+      await api.post(`/clients/${clientId}/documents/upload`, formData);
 
       toast({ title: 'Success', description: 'Document uploaded' });
       setModalOpen(false);
@@ -155,44 +139,36 @@ export const ClientDocumentsTab = ({ clientId }: ClientDocumentsTabProps) => {
       if (fileInputRef.current) fileInputRef.current.value = '';
       fetchDocuments();
     } catch (error: any) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ title: 'Error', description: error.message || 'Failed to upload document', variant: 'destructive' });
     }
 
     setUploading(false);
   };
 
   const handleDownload = async (doc: Document) => {
-    const { data, error } = await supabase.storage
-      .from('client-documents')
-      .download(doc.file_path);
-
-    if (error) {
+    try {
+      // TODO: Implement proper download URL construction from API base
+      const data = await api.get<Blob>(`/client_documents/${doc.id}/download`);
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = doc.file_name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
       toast({ title: 'Error', description: 'Failed to download file', variant: 'destructive' });
-      return;
     }
-
-    const url = URL.createObjectURL(data);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = doc.file_name;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   const handleDelete = async () => {
     if (!docToDelete) return;
 
-    // Delete from storage
-    await supabase.storage.from('client-documents').remove([docToDelete.file_path]);
-
-    // Delete from database
-    const { error } = await supabase.from('client_documents').delete().eq('id', docToDelete.id);
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.delete('/client_documents/' + docToDelete.id);
       toast({ title: 'Deleted', description: 'Document removed' });
       fetchDocuments();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to delete document', variant: 'destructive' });
     }
     setDeleteDialogOpen(false);
     setDocToDelete(null);

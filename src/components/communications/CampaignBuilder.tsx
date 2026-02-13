@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Megaphone, Plus, Play, Pause, Users, CheckCircle, XCircle, Clock, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -79,15 +79,18 @@ export const CampaignBuilder = () => {
 
   const fetchData = async () => {
     setLoading(true);
-    const [campaignsRes, templatesRes, clientsRes] = await Promise.all([
-      supabase.from('communication_campaigns').select('*').order('created_at', { ascending: false }),
-      supabase.from('message_templates').select('id, name, channel, category').eq('is_active', true),
-      supabase.from('clients').select('id, client_name, email, phone, risk_profile')
-    ]);
-
-    if (campaignsRes.data) setCampaigns(campaignsRes.data);
-    if (templatesRes.data) setTemplates(templatesRes.data);
-    if (clientsRes.data) setClients(clientsRes.data);
+    try {
+      const [campaignsData, templatesData, clientsData] = await Promise.all([
+        api.get<Campaign[]>('/communication_campaigns'),
+        api.get<Template[]>('/message_templates', { is_active: true }),
+        api.get<Client[]>('/clients')
+      ]);
+      if (campaignsData) setCampaigns(campaignsData);
+      if (templatesData) setTemplates(templatesData);
+      if (clientsData) setClients(clientsData);
+    } catch {
+      // API client already shows toast on error
+    }
     setLoading(false);
   };
 
@@ -99,10 +102,9 @@ export const CampaignBuilder = () => {
 
     setSubmitting(true);
 
-    // Create campaign
-    const { data: campaign, error: campaignError } = await supabase
-      .from('communication_campaigns')
-      .insert({
+    try {
+      // Create campaign
+      const campaign = await api.post<any>('/communication_campaigns', {
         name,
         description: description || null,
         template_id: templateId || null,
@@ -111,66 +113,47 @@ export const CampaignBuilder = () => {
         scheduled_at: scheduledAt || null,
         total_recipients: selectedClients.length,
         created_by: user?.id
-      })
-      .select()
-      .single();
+      });
 
-    if (campaignError) {
-      toast({ title: 'Error', description: campaignError.message, variant: 'destructive' });
-      setSubmitting(false);
-      return;
-    }
+      // Add recipients
+      const recipients = selectedClients.map(clientId => ({
+        campaign_id: campaign.id,
+        client_id: clientId,
+        status: 'pending'
+      }));
 
-    // Add recipients
-    const recipients = selectedClients.map(clientId => ({
-      campaign_id: campaign.id,
-      client_id: clientId,
-      status: 'pending'
-    }));
+      await api.post('/campaign_recipients', recipients);
 
-    const { error: recipientError } = await supabase
-      .from('campaign_recipients')
-      .insert(recipients);
-
-    if (recipientError) {
-      toast({ title: 'Error', description: recipientError.message, variant: 'destructive' });
-    } else {
       toast({ title: 'Success', description: 'Campaign created successfully' });
       setModalOpen(false);
       resetForm();
       fetchData();
+    } catch {
+      // API client already shows toast on error
     }
     setSubmitting(false);
   };
 
   const handleLaunchCampaign = async (campaign: Campaign) => {
-    const { error } = await supabase
-      .from('communication_campaigns')
-      .update({ 
-        status: 'sending', 
-        started_at: new Date().toISOString() 
-      })
-      .eq('id', campaign.id);
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.put(`/communication_campaigns/${campaign.id}`, {
+        status: 'sending',
+        started_at: new Date().toISOString()
+      });
       toast({ title: 'Campaign Launched', description: 'Messages are being sent' });
       fetchData();
+    } catch {
+      // API client already shows toast on error
     }
   };
 
   const handleCancelCampaign = async (campaignId: string) => {
-    const { error } = await supabase
-      .from('communication_campaigns')
-      .update({ status: 'cancelled' })
-      .eq('id', campaignId);
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.put(`/communication_campaigns/${campaignId}`, { status: 'cancelled' });
       toast({ title: 'Campaign Cancelled' });
       fetchData();
+    } catch {
+      // API client already shows toast on error
     }
   };
 

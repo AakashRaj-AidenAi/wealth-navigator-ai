@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -59,8 +59,6 @@ const insightLabels = {
   meeting_summary: 'Summary'
 };
 
-const INSIGHTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-insights`;
-
 export const AIInsightsWidget = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -70,35 +68,18 @@ export const AIInsightsWidget = () => {
 
   const fetchInsights = async () => {
     if (!user) return;
-    
+
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      const resp = await fetch(INSIGHTS_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ type: "dashboard" }),
-      });
-
-      if (!resp.ok) {
-        const error = await resp.json().catch(() => ({}));
-        if (resp.status === 429) {
-          toast.error("AI rate limit reached. Try again later.");
-        } else if (resp.status === 402) {
-          toast.error("AI usage limit reached. Please add credits.");
-        } else {
-          console.error("AI insights error:", error);
-        }
-        return;
-      }
-
-      const data = await resp.json();
+      const data = await api.post<{ insights: Insight[] }>('/insights/ai-insights', { type: 'dashboard' });
       setInsights(data.insights || []);
-    } catch (error) {
-      console.error("Failed to fetch insights:", error);
+    } catch (error: any) {
+      if (error?.status === 429) {
+        toast.error("AI rate limit reached. Try again later.");
+      } else if (error?.status === 402) {
+        toast.error("AI usage limit reached. Please add credits.");
+      } else {
+        console.error("Failed to fetch insights:", error);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);

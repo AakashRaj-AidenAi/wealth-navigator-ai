@@ -11,22 +11,49 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency, formatCurrencyShort } from '@/lib/currency';
 import { formatDistanceToNow, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import {
-  Phone, Mail, Calendar as CalendarIcon, MessageSquare, 
+  Phone, Mail, Calendar as CalendarIcon, MessageSquare,
   ListTodo, UserCheck, Star, Clock, Send, Loader2,
   History, Activity, ExternalLink, CheckCircle, XCircle
 } from 'lucide-react';
-import type { Database } from '@/integrations/supabase/types';
 
-type Lead = Database['public']['Tables']['leads']['Row'];
-type LeadActivity = Database['public']['Tables']['lead_activities']['Row'];
-type LeadStage = Database['public']['Enums']['lead_stage'];
+interface Lead {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  expected_value: number | null;
+  stage: LeadStage;
+  source: string | null;
+  lead_score: number | null;
+  probability: number | null;
+  notes: string | null;
+  converted_client_id: string | null;
+  converted_at: string | null;
+  last_activity_at: string | null;
+  loss_reason: string | null;
+  next_follow_up: string | null;
+  created_at: string;
+  assigned_to: string | null;
+}
+
+interface LeadActivity {
+  id: string;
+  lead_id: string;
+  activity_type: string;
+  title: string;
+  description: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+type LeadStage = 'new' | 'contacted' | 'meeting' | 'proposal' | 'closed_won' | 'lost';
 
 interface LeadQuickActionsDrawerProps {
   lead: Lead | null;
@@ -90,35 +117,30 @@ export const LeadQuickActionsDrawer = ({
     if (!lead) return;
 
     if (value === 'activity') {
-      const { data } = await supabase
-        .from('lead_activities')
-        .select('*')
-        .eq('lead_id', lead.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-      if (data) setActivities(data);
+      try {
+        const data = await api.get<LeadActivity[]>('/lead_activities', { lead_id: lead.id });
+        setActivities(data);
+      } catch { /* API client shows toast */ }
     } else if (value === 'history') {
       setLoadingHistory(true);
-      const { data } = await supabase
-        .from('lead_stage_history')
-        .select('*')
-        .eq('lead_id', lead.id)
-        .order('changed_at', { ascending: false });
-      if (data) setStageHistory(data);
+      try {
+        const data = await api.get<any[]>('/lead_stage_history', { lead_id: lead.id });
+        setStageHistory(data);
+      } catch { /* API client shows toast */ }
       setLoadingHistory(false);
     }
   };
 
   const logActivity = async (type: string, title: string, description?: string) => {
     if (!lead || !user) return;
-    await supabase.from('lead_activities').insert({
+    await api.post('/lead_activities', {
       lead_id: lead.id,
       activity_type: type,
       title,
       description,
       created_by: user.id
     });
-    await supabase.from('leads').update({ last_activity_at: new Date().toISOString() }).eq('id', lead.id);
+    await api.put(`/leads/${lead.id}`, { last_activity_at: new Date().toISOString() });
   };
 
   const handleLogCall = async () => {
@@ -156,9 +178,9 @@ export const LeadQuickActionsDrawer = ({
     
     // Create meeting activity
     await logActivity('meeting', `Meeting scheduled for ${format(meetingDate, 'PPP')}`, meetingNotes);
-    
+
     // Create task for meeting
-    await supabase.from('tasks').insert({
+    await api.post('/tasks', {
       title: `Meeting with ${lead.name}`,
       description: meetingNotes || `Scheduled meeting with lead ${lead.name}`,
       priority: 'high',
@@ -188,7 +210,7 @@ export const LeadQuickActionsDrawer = ({
     }
     setLoading(true);
     
-    await supabase.from('tasks').insert({
+    await api.post('/tasks', {
       title: taskTitle,
       description: `Task for lead: ${lead.name}`,
       priority: 'medium',
@@ -228,9 +250,7 @@ export const LeadQuickActionsDrawer = ({
     }
     setLoading(true);
     
-    await supabase.from('leads')
-      .update({ next_follow_up: followUpDate.toISOString() })
-      .eq('id', lead.id);
+    await api.put(`/leads/${lead.id}`, { next_follow_up: followUpDate.toISOString() });
     
     await logActivity('reminder', 'Follow-up scheduled', `Next follow-up set for ${format(followUpDate, 'PPP')}`);
     toast({ title: 'Follow-up Set', description: `Reminder set for ${format(followUpDate, 'PPP')}` });
@@ -246,13 +266,11 @@ export const LeadQuickActionsDrawer = ({
     }
     setLoading(true);
     
-    await supabase.from('leads')
-      .update({ 
-        stage: 'lost',
-        loss_reason: lossReason,
-        notes: lossNotes ? `${lead.notes || ''}\n\nLoss Notes: ${lossNotes}` : lead.notes
-      })
-      .eq('id', lead.id);
+    await api.put(`/leads/${lead.id}`, {
+      stage: 'lost',
+      loss_reason: lossReason,
+      notes: lossNotes ? `${lead.notes || ''}\n\nLoss Notes: ${lossNotes}` : lead.notes
+    });
     
     await logActivity('stage_change', 'Lead marked as lost', `Reason: ${lossReason}. ${lossNotes}`);
     toast({ title: 'Lead Closed', description: 'Lead marked as lost' });

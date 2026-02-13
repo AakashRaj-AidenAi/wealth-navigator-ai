@@ -12,11 +12,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_current_active_user, get_db
 from app.models.corporate_action import (
     ClientCorporateAction,
     CorporateAction,
 )
+from app.models.user import User
 from app.schemas.corporate_action import (
     ClientCorporateActionResponse,
     CorporateActionDetailResponse,
@@ -31,12 +32,12 @@ async def list_corporate_actions(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ) -> list[CorporateActionResponse]:
     """List corporate actions for the current advisor."""
     query = (
         select(CorporateAction)
-        .where(CorporateAction.advisor_id == current_user["id"])
+        .where(CorporateAction.advisor_id == current_user.id)
         .order_by(CorporateAction.created_at.desc())
         .offset(skip)
         .limit(limit)
@@ -50,14 +51,14 @@ async def list_corporate_actions(
 async def get_corporate_action(
     action_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ) -> CorporateActionDetailResponse:
     """Get a corporate action with its client impacts."""
     query = (
         select(CorporateAction)
         .where(
             CorporateAction.id == action_id,
-            CorporateAction.advisor_id == current_user["id"],
+            CorporateAction.advisor_id == current_user.id,
         )
         .options(selectinload(CorporateAction.client_corporate_actions))
     )
@@ -79,14 +80,14 @@ async def get_client_corporate_actions(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ) -> list[ClientCorporateActionResponse]:
     """Get corporate actions impacting a specific client."""
     query = (
         select(ClientCorporateAction)
         .where(
             ClientCorporateAction.client_id == client_id,
-            ClientCorporateAction.advisor_id == current_user["id"],
+            ClientCorporateAction.advisor_id == current_user.id,
         )
         .order_by(ClientCorporateAction.created_at.desc())
         .offset(skip)

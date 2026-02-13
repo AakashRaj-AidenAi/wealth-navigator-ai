@@ -11,7 +11,7 @@ import { formatCurrencyShort, formatCurrency } from '@/lib/currency';
 import { TrendingUp, IndianRupee, Wallet, FileText, LineChart as LineChartIcon, Loader2, AlertTriangle, DollarSign, Crown, Target, PieChart as PieChartIcon, ArrowUpRight, ArrowDownRight, Users, BarChart3, Filter, Building2 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, Cell, ScatterChart, Scatter, ZAxis } from 'recharts';
 import { format, subMonths, subQuarters, subYears, isAfter, addMonths } from 'date-fns';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useQuery } from '@tanstack/react-query';
 import { CashLiquidityOverview } from '@/components/business/CashLiquidityOverview';
 
@@ -38,27 +38,15 @@ const CEODashboard = () => {
   // Cash & Liquidity data
   const { data: cashBalances, isLoading: cashLoading } = useQuery({
     queryKey: ['cash-balances-all'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('cash_balances').select('*');
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.get<any[]>('/funding/cash-balances'),
   });
   const { data: fundingRequests, isLoading: fundingLoading } = useQuery({
     queryKey: ['funding-requests-all'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('funding_requests').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.get<any[]>('/funding/requests', { order: 'created_at.desc' }),
   });
   const { data: payoutRequests, isLoading: payoutLoading } = useQuery({
     queryKey: ['payout-requests-all'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('payout_requests').select('*').order('requested_date', { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.get<any[]>('/payout-requests', { order: 'requested_date.desc' }),
   });
 
   const isLoading = aumLoading || revLoading || invLoading || payLoading || comLoading || cashLoading || fundingLoading || payoutLoading;

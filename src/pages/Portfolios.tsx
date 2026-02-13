@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { formatCurrency } from '@/lib/currency';
 import {
   Table,
@@ -66,46 +66,47 @@ const Portfolios = () => {
 
   useEffect(() => {
     const fetchPortfolios = async () => {
-      const { data: clients } = await supabase
-        .from('clients')
-        .select('*')
-        .order('total_assets', { ascending: false });
+      try {
+        const clientsRes = await api.get('/clients', { order: 'total_assets.desc' });
+        const clients = extractItems<any>(clientsRes);
 
-      if (clients) {
         // Fetch goals and orders counts for each client
         const portfoliosWithCounts = await Promise.all(
-          clients.map(async (client) => {
-            const [goalsResult, ordersResult, goalsDataResult] = await Promise.all([
-              supabase.from('goals').select('id', { count: 'exact', head: true }).eq('client_id', client.id),
-              supabase.from('orders').select('id', { count: 'exact', head: true }).eq('client_id', client.id),
-              supabase.from('goals').select('target_amount, current_amount').eq('client_id', client.id),
+          clients.map(async (client: any) => {
+            const [goalsRes, ordersRes] = await Promise.all([
+              api.get('/goals', { client_id: client.id }),
+              api.get('/orders', { client_id: client.id }),
             ]);
+            const goals = extractItems<any>(goalsRes);
+            const orders = extractItems<any>(ordersRes);
 
             // Calculate average goal progress
             let goalProgress = 0;
-            if (goalsDataResult.data && goalsDataResult.data.length > 0) {
-              const totalProgress = goalsDataResult.data.reduce((sum, g) => {
+            if (goals.length > 0) {
+              const totalProgress = goals.reduce((sum: number, g: any) => {
                 return sum + ((g.current_amount || 0) / g.target_amount) * 100;
               }, 0);
-              goalProgress = totalProgress / goalsDataResult.data.length;
+              goalProgress = totalProgress / goals.length;
             }
 
             return {
               ...client,
-              goalsCount: goalsResult.count || 0,
-              ordersCount: ordersResult.count || 0,
+              goalsCount: goals.length,
+              ordersCount: orders.length,
               goalProgress,
             };
           })
         );
 
         setPortfolios(portfoliosWithCounts);
-        
+
         // Simulate alert counts (in production, calculate from real data)
         setAlerts({
           driftCount: Math.floor(Math.random() * 3),
           underperformers: portfoliosWithCounts.filter(p => (p.goalProgress || 0) < 50).length,
         });
+      } catch (err) {
+        console.error('Failed to load portfolios:', err);
       }
       setLoading(false);
     };

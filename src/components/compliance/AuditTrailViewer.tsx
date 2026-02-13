@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { History, User, Database, ArrowRight, Filter, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,24 +40,23 @@ export const AuditTrailViewer = () => {
   }, []);
 
   const fetchProfiles = async () => {
-    const { data } = await supabase.from('profiles').select('*');
-    if (data) {
+    try {
+      const data = extractItems<Profile>(await api.get('/profiles'));
       const profileMap = new Map<string, Profile>();
       data.forEach(p => profileMap.set(p.user_id, p));
       setProfiles(profileMap);
+    } catch {
+      // API client already shows toast on error
     }
   };
 
   const fetchAuditLogs = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('audit_logs')
-      .select('*')
-      .order('changed_at', { ascending: false })
-      .limit(100);
-
-    if (data) {
-      setLogs(data);
+    try {
+      const data = await api.get('/audit_logs');
+      setLogs(extractItems<AuditLog>(data));
+    } catch {
+      // API client already shows toast on error
     }
     setLoading(false);
   };

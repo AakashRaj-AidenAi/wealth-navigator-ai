@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,9 +12,17 @@ import {
   AlertTriangle, ChevronRight, Clock, Phone, 
   Calendar, TrendingDown, Users
 } from 'lucide-react';
-import type { Database } from '@/integrations/supabase/types';
-
-type Lead = Database['public']['Tables']['leads']['Row'];
+interface Lead {
+  id: string;
+  name: string;
+  stage: string;
+  expected_value: number | null;
+  probability: number | null;
+  last_activity_at: string | null;
+  next_follow_up: string | null;
+  assigned_to: string | null;
+  [key: string]: any;
+}
 
 interface AttentionLead extends Lead {
   reason: 'overdue_followup' | 'no_activity' | 'stale' | 'high_value_idle';
@@ -39,21 +47,23 @@ export const LeadsNeedingAttentionWidget = () => {
   const fetchLeadsNeedingAttention = async () => {
     if (!user) return;
 
-    const { data } = await supabase
-      .from('leads')
-      .select('*')
-      .eq('assigned_to', user.id)
-      .not('stage', 'in', '("closed_won","lost")')
-      .order('last_activity_at', { ascending: true, nullsFirst: true });
+    try {
+    const dataRes = await api.get('/leads', {
+      assigned_to: user.id,
+      stage_not_in: 'closed_won,lost',
+      _sort: 'last_activity_at',
+      _order: 'asc'
+    });
 
-    if (data) {
-      const now = new Date();
-      const attentionLeads: AttentionLead[] = [];
-      let overdueCount = 0;
-      let staleCount = 0;
-      let totalValue = 0;
+    const data = extractItems<Lead>(dataRes);
 
-      data.forEach(lead => {
+    const now = new Date();
+    const attentionLeads: AttentionLead[] = [];
+    let overdueCount = 0;
+    let staleCount = 0;
+    let totalValue = 0;
+
+    data.forEach(lead => {
         const daysSinceActivity = lead.last_activity_at 
           ? differenceInDays(now, new Date(lead.last_activity_at))
           : 999;
@@ -89,17 +99,19 @@ export const LeadsNeedingAttentionWidget = () => {
         }
       });
 
-      // Sort by priority then by value
-      attentionLeads.sort((a, b) => {
-        const priorityOrder = { high: 0, medium: 1, low: 2 };
-        if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
-          return priorityOrder[a.priority] - priorityOrder[b.priority];
-        }
-        return (b.expected_value || 0) - (a.expected_value || 0);
-      });
+    // Sort by priority then by value
+    attentionLeads.sort((a, b) => {
+      const priorityOrder = { high: 0, medium: 1, low: 2 };
+      if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+        return priorityOrder[a.priority] - priorityOrder[b.priority];
+      }
+      return (b.expected_value || 0) - (a.expected_value || 0);
+    });
 
-      setLeads(attentionLeads.slice(0, 5));
-      setStats({ overdueCount, staleCount, totalValue });
+    setLeads(attentionLeads.slice(0, 5));
+    setStats({ overdueCount, staleCount, totalValue });
+    } catch (err) {
+      console.error('Failed to load leads needing attention:', err);
     }
 
     setLoading(false);

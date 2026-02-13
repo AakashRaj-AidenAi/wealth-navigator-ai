@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { formatCurrency } from '@/lib/currency';
 import { ChevronRight, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -36,14 +36,12 @@ export const ClientsTable = () => {
 
   useEffect(() => {
     const fetchClients = async () => {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('id, client_name, email, total_assets, risk_profile, status')
-        .order('total_assets', { ascending: false })
-        .limit(6);
-
-      if (!error && data) {
+      try {
+        const response = await api.get('/clients', { _sort: 'total_assets', _order: 'desc', _limit: '6' });
+        const data = extractItems<Client>(response);
         setClients(data);
+      } catch (err) {
+        console.error('Failed to load clients:', err);
       }
       setLoading(false);
     };

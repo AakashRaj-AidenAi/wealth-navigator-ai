@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ---------------------------------------------------------------------------
@@ -22,13 +22,13 @@ class LeadActivityCreate(BaseModel):
     activity_type: str
     title: Optional[str] = None
     description: Optional[str] = None
-    metadata: Optional[dict[str, Any]] = None
+    extra_data: Optional[dict[str, Any]] = Field(None, alias="metadata")
 
 
 class LeadActivityResponse(BaseModel):
     """Schema for returning a lead activity."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: uuid.UUID
     lead_id: uuid.UUID
@@ -36,7 +36,7 @@ class LeadActivityResponse(BaseModel):
     activity_type: str
     title: Optional[str] = None
     description: Optional[str] = None
-    metadata: Optional[dict[str, Any]] = None
+    extra_data: Optional[dict[str, Any]] = Field(None, alias="metadata")
     created_at: datetime
     updated_at: datetime
 

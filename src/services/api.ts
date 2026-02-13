@@ -5,7 +5,7 @@
 
 import { toast } from '@/components/ui/sonner';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
 interface TokenPair {
   access_token: string;
@@ -183,6 +183,17 @@ class ApiClient {
   async delete<T>(path: string): Promise<T> {
     return this.request<T>(path, { method: 'DELETE' });
   }
+}
+
+/**
+ * Extract array from a paginated or plain array response.
+ * Handles both { items: [...] } and plain [...] formats.
+ */
+export function extractItems<T>(response: any): T[] {
+  if (Array.isArray(response)) return response;
+  if (response && Array.isArray(response.items)) return response.items;
+  if (response && Array.isArray(response.data)) return response.data;
+  return [];
 }
 
 export class ApiError extends Error {

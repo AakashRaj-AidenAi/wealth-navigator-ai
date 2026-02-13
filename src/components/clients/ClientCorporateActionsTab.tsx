@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { formatCurrency } from '@/lib/currency';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -76,21 +76,8 @@ export const ClientCorporateActionsTab = ({ clientId }: ClientCorporateActionsTa
 
   const fetchActions = async () => {
     try {
-      const { data: session } = await supabase.auth.getSession();
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/corporate-actions?action=client&clientId=${clientId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${session.session?.access_token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setActions(data.actions || []);
-      }
+      const data = await api.get<{ actions: ClientCorporateAction[] }>('/corporate-actions', { action: 'client', clientId });
+      setActions(data.actions || []);
     } catch (error) {
       console.error('Error fetching client corporate actions:', error);
     } finally {
@@ -105,29 +92,15 @@ export const ClientCorporateActionsTab = ({ clientId }: ClientCorporateActionsTa
   const handleNotify = async (actionId: string, createTask: boolean) => {
     setNotifying(actionId);
     try {
-      const { data: session } = await supabase.auth.getSession();
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/corporate-actions?action=notify`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.session?.access_token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            clientCorporateActionId: actionId,
-            createTask
-          })
-        }
-      );
-
-      if (response.ok) {
-        toast({
-          title: 'Success',
-          description: createTask ? 'Task created successfully' : 'Marked as notified'
-        });
-        fetchActions();
-      }
+      await api.post('/corporate-actions/notify', {
+        clientCorporateActionId: actionId,
+        createTask
+      });
+      toast({
+        title: 'Success',
+        description: createTask ? 'Task created successfully' : 'Marked as notified'
+      });
+      fetchActions();
     } catch (error) {
       toast({
         title: 'Error',

@@ -50,7 +50,7 @@ class Conversation(BaseMixin, Base):
     message_count: Mapped[int] = mapped_column(
         Integer, default=0, server_default="0"
     )
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    extra_data: Mapped[Optional[dict]] = mapped_column("metadata", JSON, nullable=True)
 
     # -- relationships -------------------------------------------------------
     messages: Mapped[List["Message"]] = relationship(
@@ -83,8 +83,8 @@ class Message(BaseMixin, Base):
     agent_name: Mapped[Optional[str]] = mapped_column(
         String, nullable=True
     )  # which agent responded
-    metadata: Mapped[Optional[dict]] = mapped_column(
-        JSON, nullable=True
+    extra_data: Mapped[Optional[dict]] = mapped_column(
+        "metadata", JSON, nullable=True
     )  # stores: tool_calls, entities extracted, intent, action_cards, table_data, chart_config
     token_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     model_used: Mapped[Optional[str]] = mapped_column(

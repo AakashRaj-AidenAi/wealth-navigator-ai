@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Send, Mail, MessageSquare, Paperclip, FileText, X, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -73,22 +73,28 @@ export const MessageComposer = ({ clientId, onMessageSent }: MessageComposerProp
 
   const fetchData = async () => {
     setLoading(true);
-    const [clientsRes, templatesRes] = await Promise.all([
-      supabase.from('clients').select('id, client_name, email, phone').order('client_name'),
-      supabase.from('message_templates').select('*').eq('is_active', true)
-    ]);
-
-    if (clientsRes.data) setClients(clientsRes.data);
-    if (templatesRes.data) setTemplates(templatesRes.data);
+    try {
+      const [clientsRes, templatesRes] = await Promise.all([
+        api.get('/clients'),
+        api.get('/message_templates', { is_active: true })
+      ]);
+      const clientsData = extractItems<Client>(clientsRes);
+      const templatesData = extractItems<Template>(templatesRes);
+      setClients(clientsData);
+      setTemplates(templatesData);
+    } catch {
+      // API client already shows toast on error
+    }
     setLoading(false);
   };
 
   const fetchClientDocuments = async (cId: string) => {
-    const { data } = await supabase
-      .from('client_documents')
-      .select('id, file_name, file_path, document_type')
-      .eq('client_id', cId);
-    if (data) setDocuments(data);
+    try {
+      const data = await api.get('/client_documents', { client_id: cId });
+      setDocuments(extractItems<Document>(data));
+    } catch {
+      // API client already shows toast on error
+    }
   };
 
   const handleClientChange = (cId: string) => {
@@ -133,35 +139,35 @@ export const MessageComposer = ({ clientId, onMessageSent }: MessageComposerProp
       .filter(d => attachments.includes(d.id))
       .map(d => ({ id: d.id, name: d.file_name, path: d.file_path }));
 
-    const { error } = await supabase.from('communication_logs').insert({
-      client_id: selectedClientId,
-      communication_type: channel,
-      direction: 'outbound',
-      subject: channel === 'email' ? subject : null,
-      content,
-      attachments: attachmentData.length > 0 ? attachmentData : null,
-      template_id: selectedTemplateId || null,
-      sent_by: user?.id,
-      sent_at: new Date().toISOString(),
-      status: 'sent'
-    });
+    try {
+      await api.post('/communication_logs', {
+        client_id: selectedClientId,
+        communication_type: channel,
+        direction: 'outbound',
+        subject: channel === 'email' ? subject : null,
+        content,
+        attachments: attachmentData.length > 0 ? attachmentData : null,
+        template_id: selectedTemplateId || null,
+        sent_by: user?.id,
+        sent_at: new Date().toISOString(),
+        status: 'sent'
+      });
 
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
       toast({ title: 'Message Sent', description: `${channel === 'email' ? 'Email' : 'WhatsApp message'} logged successfully` });
-      
+
       // Reset form
       setSubject('');
       setContent('');
       setAttachments([]);
       setSelectedTemplateId('');
-      
+
       if (!clientId) {
         setSelectedClientId('');
       }
-      
+
       onMessageSent?.();
+    } catch {
+      // API client already shows toast on error
     }
     setSending(false);
   };

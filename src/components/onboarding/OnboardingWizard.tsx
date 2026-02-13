@@ -4,14 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ChevronLeft, ChevronRight, Loader2, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 import { TypeSelectionStep } from './steps/TypeSelectionStep';
 import { DetailsStep } from './steps/DetailsStep';
 import { DocumentsStep } from './steps/DocumentsStep';
 import { ReviewStep } from './steps/ReviewStep';
-import { OnboardingState, ClientType, DuplicateMatch, FormData } from './types';
+import { OnboardingState, ClientType, DuplicateMatch, OnboardingFormData } from './types';
 
 interface OnboardingWizardProps {
   open: boolean;
@@ -109,27 +109,23 @@ export const OnboardingWizard = ({ open, onOpenChange, onSuccess }: OnboardingWi
 
   const uploadDocuments = async (clientId: string) => {
     for (const file of state.documents) {
-      const filePath = `${clientId}/${Date.now()}-${file.name}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('client-documents')
-        .upload(filePath, file);
+      try {
+        // Upload file via API
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('client_id', clientId);
+        formData.append('document_type', 'kyc');
 
-      if (uploadError) {
-        console.error('Document upload error:', uploadError);
-        continue;
+        await fetch(`${import.meta.env.VITE_API_URL || '/api'}/client_documents/upload`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+          },
+          body: formData,
+        });
+      } catch (err) {
+        console.error('Document upload error:', err);
       }
-
-      // Create document record
-      await supabase.from('client_documents').insert({
-        client_id: clientId,
-        file_name: file.name,
-        file_path: filePath,
-        file_size: file.size,
-        mime_type: file.type,
-        document_type: 'kyc',
-        uploaded_by: user!.id,
-      });
     }
   };
 
@@ -168,14 +164,10 @@ export const OnboardingWizard = ({ open, onOpenChange, onSuccess }: OnboardingWi
         clientPayload.authorized_person_phone = data.authorized_person_phone?.trim() || null;
       }
 
-      const { data: newClient, error: clientError } = await supabase
-        .from('clients')
-        .insert(clientPayload)
-        .select()
-        .single();
+      const newClient = await api.post<any>('/clients', clientPayload);
 
-      if (clientError) {
-        throw clientError;
+      if (!newClient) {
+        throw new Error('Failed to create client');
       }
 
       // Upload documents if any
@@ -184,7 +176,7 @@ export const OnboardingWizard = ({ open, onOpenChange, onSuccess }: OnboardingWi
       }
 
       // Create onboarding activity
-      await supabase.from('client_activities').insert({
+      await api.post('/client_activities', {
         client_id: newClient.id,
         created_by: user.id,
         activity_type: 'meeting',
@@ -194,7 +186,7 @@ export const OnboardingWizard = ({ open, onOpenChange, onSuccess }: OnboardingWi
       });
 
       // Create onboarding task
-      await supabase.from('tasks').insert({
+      await api.post('/tasks', {
         title: `Onboarding: ${data.client_name.trim()}`,
         description: `Complete client onboarding:\n• Collect KYC documents\n• Risk assessment questionnaire\n• Investment goals discussion\n• Portfolio recommendations`,
         priority: 'high',
@@ -208,7 +200,7 @@ export const OnboardingWizard = ({ open, onOpenChange, onSuccess }: OnboardingWi
       });
 
       // Create risk profiling task
-      await supabase.from('tasks').insert({
+      await api.post('/tasks', {
         title: `Risk Profiling: ${data.client_name.trim()}`,
         description: `Complete risk profiling assessment to determine client's risk appetite and recommended portfolio allocation.`,
         priority: 'high',
@@ -222,7 +214,7 @@ export const OnboardingWizard = ({ open, onOpenChange, onSuccess }: OnboardingWi
       });
 
       // Create annual risk re-profiling reminder
-      await supabase.from('client_reminders').insert({
+      await api.post('/client_reminders', {
         client_id: newClient.id,
         created_by: user.id,
         reminder_type: 'review_meeting',
@@ -234,7 +226,7 @@ export const OnboardingWizard = ({ open, onOpenChange, onSuccess }: OnboardingWi
       });
 
       // Add prospect tag
-      await supabase.from('client_tags').insert({
+      await api.post('/client_tags', {
         client_id: newClient.id,
         tag: 'prospect',
       });

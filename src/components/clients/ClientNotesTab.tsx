@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, MessageSquare, Pin, Trash2, Loader2, Edit } from 'lucide-react';
@@ -62,14 +62,12 @@ export const ClientNotesTab = ({ clientId }: ClientNotesTabProps) => {
 
   const fetchNotes = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('client_notes')
-      .select('*')
-      .eq('client_id', clientId)
-      .order('is_pinned', { ascending: false })
-      .order('created_at', { ascending: false });
-
-    if (data) setNotes(data);
+    try {
+      const data = await api.get('/client_notes', { client_id: clientId });
+      setNotes(extractItems<Note>(data));
+    } catch (err) {
+      console.error('Failed to load notes:', err);
+    }
     setLoading(false);
   };
 
@@ -84,63 +82,48 @@ export const ClientNotesTab = ({ clientId }: ClientNotesTabProps) => {
     }
 
     setSaving(true);
-    
-    if (editingNote) {
-      const { error } = await supabase
-        .from('client_notes')
-        .update({
+
+    try {
+      if (editingNote) {
+        await api.put('/client_notes/' + editingNote.id, {
           title: form.title || null,
           content: form.content
-        })
-        .eq('id', editingNote.id);
-
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' });
-      } else {
+        });
         toast({ title: 'Success', description: 'Note updated' });
-        closeModal();
-        fetchNotes();
-      }
-    } else {
-      const { error } = await supabase.from('client_notes').insert({
-        client_id: clientId,
-        created_by: user.id,
-        title: form.title || null,
-        content: form.content
-      });
-
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' });
       } else {
+        await api.post('/client_notes', {
+          client_id: clientId,
+          created_by: user.id,
+          title: form.title || null,
+          content: form.content
+        });
         toast({ title: 'Success', description: 'Note added' });
-        closeModal();
-        fetchNotes();
       }
+      closeModal();
+      fetchNotes();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to save note', variant: 'destructive' });
     }
     setSaving(false);
   };
 
   const handleTogglePin = async (note: Note) => {
-    const { error } = await supabase
-      .from('client_notes')
-      .update({ is_pinned: !note.is_pinned })
-      .eq('id', note.id);
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.put('/client_notes/' + note.id, { is_pinned: !note.is_pinned });
       fetchNotes();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to update note', variant: 'destructive' });
     }
   };
 
   const handleDelete = async () => {
     if (!noteToDelete) return;
-    const { error } = await supabase.from('client_notes').delete().eq('id', noteToDelete);
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.delete('/client_notes/' + noteToDelete);
       toast({ title: 'Deleted', description: 'Note removed' });
       fetchNotes();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to delete note', variant: 'destructive' });
     }
     setDeleteDialogOpen(false);
     setNoteToDelete(null);

@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { Frown, ChevronRight, User } from 'lucide-react';
 import { sentimentConfig } from '@/hooks/useSentimentAnalysis';
 
@@ -23,56 +23,60 @@ export const NegativeSentimentWidget = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetch = async () => {
-      // Get all negative/urgent sentiment logs
-      const { data: sentimentData } = await supabase
-        .from('sentiment_logs')
-        .select('client_id, sentiment, source_text')
-        .in('sentiment', ['negative', 'urgent'])
-        .order('analyzed_at', { ascending: false });
+    const fetchData = async () => {
+      try {
+        // Get all negative/urgent sentiment logs
+        const sentimentDataRes = await api.get('/sentiment_logs', {
+          sentiment_in: 'negative,urgent',
+          _sort: 'analyzed_at',
+          _order: 'desc'
+        });
 
-      if (!sentimentData || sentimentData.length === 0) {
-        setLoading(false);
-        return;
+        const sentimentData = extractItems<any>(sentimentDataRes);
+
+        if (sentimentData.length === 0) {
+          setLoading(false);
+          return;
+        }
+
+        // Group by client
+        const clientMap = new Map<string, { negative: number; urgent: number; latestText: string }>();
+        for (const entry of sentimentData) {
+          const existing = clientMap.get(entry.client_id) || { negative: 0, urgent: 0, latestText: '' };
+          if (entry.sentiment === 'negative') existing.negative++;
+          if (entry.sentiment === 'urgent') existing.urgent++;
+          if (!existing.latestText) existing.latestText = (entry.source_text as string) || '';
+          clientMap.set(entry.client_id, existing);
+        }
+
+        // Fetch client names
+        const clientIds = [...clientMap.keys()];
+        const clientsDataRes = await api.get('/clients', { id_in: clientIds.join(',') });
+        const clientsData = extractItems<any>(clientsDataRes);
+
+        const nameMap = new Map(clientsData.map(c => [c.id, c.client_name]));
+
+        const results: NegativeSentimentClient[] = clientIds
+          .map(id => {
+            const d = clientMap.get(id)!;
+            return {
+              client_id: id,
+              client_name: nameMap.get(id) || 'Unknown',
+              negative_count: d.negative,
+              urgent_count: d.urgent,
+              latest_text: d.latestText,
+            };
+          })
+          .sort((a, b) => (b.urgent_count + b.negative_count) - (a.urgent_count + a.negative_count))
+          .slice(0, 5);
+
+        setClients(results);
+      } catch (err) {
+        console.error('Failed to load sentiment data:', err);
       }
-
-      // Group by client
-      const clientMap = new Map<string, { negative: number; urgent: number; latestText: string }>();
-      for (const entry of sentimentData) {
-        const existing = clientMap.get(entry.client_id) || { negative: 0, urgent: 0, latestText: '' };
-        if (entry.sentiment === 'negative') existing.negative++;
-        if (entry.sentiment === 'urgent') existing.urgent++;
-        if (!existing.latestText) existing.latestText = (entry.source_text as string) || '';
-        clientMap.set(entry.client_id, existing);
-      }
-
-      // Fetch client names
-      const clientIds = [...clientMap.keys()];
-      const { data: clientsData } = await supabase
-        .from('clients')
-        .select('id, client_name')
-        .in('id', clientIds);
-
-      const nameMap = new Map((clientsData ?? []).map(c => [c.id, c.client_name]));
-
-      const results: NegativeSentimentClient[] = clientIds
-        .map(id => {
-          const d = clientMap.get(id)!;
-          return {
-            client_id: id,
-            client_name: nameMap.get(id) || 'Unknown',
-            negative_count: d.negative,
-            urgent_count: d.urgent,
-            latest_text: d.latestText,
-          };
-        })
-        .sort((a, b) => (b.urgent_count + b.negative_count) - (a.urgent_count + a.negative_count))
-        .slice(0, 5);
-
-      setClients(results);
       setLoading(false);
     };
-    fetch();
+    fetchData();
   }, []);
 
   if (loading) {

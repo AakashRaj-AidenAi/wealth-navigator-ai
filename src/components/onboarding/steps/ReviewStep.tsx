@@ -2,11 +2,11 @@ import { CheckCircle2, FileText, User, Building2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ClientType, FormData } from '../types';
+import { ClientType, OnboardingFormData } from '../types';
 
 interface ReviewStepProps {
   clientType: ClientType;
-  formData: Partial<FormData>;
+  formData: Partial<OnboardingFormData>;
   documents: File[];
 }
 

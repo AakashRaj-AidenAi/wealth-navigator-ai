@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
@@ -42,19 +42,15 @@ export const NewGoalModal = ({ open, onOpenChange, onSuccess }: NewGoalModalProp
   }, [open]);
 
   const fetchClients = async () => {
-    const { data, error } = await supabase
-      .from('clients')
-      .select('id, client_name')
-      .order('client_name');
-    
-    if (data) {
-      setClients(data);
-    }
+    try {
+      const data = await api.get('/clients');
+      setClients(extractItems<Client>(data));
+    } catch { /* API client shows toast */ }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!user) {
       toast({
         title: 'Error',
@@ -75,9 +71,8 @@ export const NewGoalModal = ({ open, onOpenChange, onSuccess }: NewGoalModalProp
 
     setLoading(true);
 
-    const { error } = await supabase
-      .from('goals')
-      .insert({
+    try {
+      await api.post('/goals', {
         client_id: selectedClient,
         name: goalName.trim(),
         description: description.trim() || null,
@@ -86,14 +81,6 @@ export const NewGoalModal = ({ open, onOpenChange, onSuccess }: NewGoalModalProp
         target_date: targetDate || null,
         priority
       });
-
-    if (error) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive'
-      });
-    } else {
       toast({
         title: 'Goal Created',
         description: `${goalName} has been created successfully.`
@@ -101,6 +88,8 @@ export const NewGoalModal = ({ open, onOpenChange, onSuccess }: NewGoalModalProp
       resetForm();
       onOpenChange(false);
       onSuccess?.();
+    } catch {
+      // API client already shows toast on error
     }
 
     setLoading(false);

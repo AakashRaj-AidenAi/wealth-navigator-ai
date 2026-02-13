@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useSegments } from '@/components/campaigns/segments/useSegments';
 import { useCreateCampaign, useSendCampaign, useCampaigns } from './useCampaigns';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Send, Save, Clock, Mail, MessageSquare, Bell, Eye, Paperclip, FileText } from 'lucide-react';
 
@@ -35,8 +35,7 @@ export const CreateCampaign = ({ onCreated, initialContent }: CreateCampaignProp
   const { data: templates = [] } = useQuery({
     queryKey: ['message-templates-active'],
     queryFn: async () => {
-      const { data } = await supabase.from('message_templates').select('*').eq('is_active', true);
-      return data ?? [];
+      return await api.get<any[]>('/message_templates', { is_active: true });
     },
     enabled: !!user,
   });

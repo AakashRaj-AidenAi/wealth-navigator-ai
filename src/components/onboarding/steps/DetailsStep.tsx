@@ -3,16 +3,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ClientType, DuplicateMatch, FormData } from '../types';
+import { ClientType, DuplicateMatch, OnboardingFormData } from '../types';
 import { DuplicateWarning } from '../DuplicateWarning';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 interface DetailsStepProps {
   clientType: ClientType;
-  formData: Partial<FormData>;
-  onFormChange: (data: Partial<FormData>) => void;
+  formData: Partial<OnboardingFormData>;
+  onFormChange: (data: Partial<OnboardingFormData>) => void;
   onDuplicatesFound: (duplicates: DuplicateMatch[], hasHardBlock: boolean) => void;
   duplicates: DuplicateMatch[];
   hasHardBlock: boolean;
@@ -52,7 +52,7 @@ export const DetailsStep = ({
     setIsChecking(true);
 
     try {
-      const { data, error } = await supabase.rpc('check_client_duplicates', {
+      const data = await api.post<any[]>('/rpc/check_client_duplicates', {
         p_advisor_id: user.id,
         p_client_name: client_name || null,
         p_email: email || null,
@@ -61,11 +61,6 @@ export const DetailsStep = ({
         p_cin_number: cin_number || null,
         p_gst_number: gst_number || null,
       });
-
-      if (error) {
-        console.error('Duplicate check error:', error);
-        return;
-      }
 
       const matches: DuplicateMatch[] = (data || []).map((d: any) => ({
         client_id: d.client_id,

@@ -1,6 +1,6 @@
 import { Task } from '@/pages/Tasks';
 import { Badge } from '@/components/ui/badge';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useNavigate } from 'react-router-dom';
 import { format, isPast, isToday } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -47,20 +47,16 @@ export const TaskKanbanView = ({ tasks, loading, onUpdate }: TaskKanbanViewProps
   const handleDrop = async (e: React.DragEvent, newStatus: Task['status']) => {
     e.preventDefault();
     const taskId = e.dataTransfer.getData('taskId');
-    
-    const { error } = await supabase
-      .from('tasks')
-      .update({ 
+
+    try {
+      await api.put(`/tasks/${taskId}`, {
         status: newStatus,
         completed_at: newStatus === 'done' ? new Date().toISOString() : null
-      })
-      .eq('id', taskId);
-
-    if (error) {
-      toast.error('Failed to update task');
-    } else {
+      });
       toast.success('Task updated');
       onUpdate();
+    } catch {
+      toast.error('Failed to update task');
     }
   };
 

@@ -10,8 +10,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_current_active_user, get_db
 from app.models.campaign import CampaignMessageLog, CommunicationCampaign
+from app.models.user import User
 from app.schemas.campaign import (
     CampaignCreate,
     CampaignMessageLogResponse,
@@ -27,12 +28,12 @@ async def list_campaigns(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ) -> list[CampaignResponse]:
     """List campaigns for the current advisor."""
     query = (
         select(CommunicationCampaign)
-        .where(CommunicationCampaign.advisor_id == current_user["id"])
+        .where(CommunicationCampaign.advisor_id == current_user.id)
         .order_by(CommunicationCampaign.created_at.desc())
         .offset(skip)
         .limit(limit)
@@ -46,11 +47,11 @@ async def list_campaigns(
 async def create_campaign(
     payload: CampaignCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ) -> CampaignResponse:
     """Create a new campaign for the current advisor."""
     campaign = CommunicationCampaign(
-        advisor_id=current_user["id"],
+        advisor_id=current_user.id,
         **payload.model_dump(exclude_unset=True),
     )
     db.add(campaign)
@@ -64,12 +65,12 @@ async def update_campaign(
     campaign_id: uuid.UUID,
     payload: CampaignUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ) -> CampaignResponse:
     """Update an existing campaign."""
     query = select(CommunicationCampaign).where(
         CommunicationCampaign.id == campaign_id,
-        CommunicationCampaign.advisor_id == current_user["id"],
+        CommunicationCampaign.advisor_id == current_user.id,
     )
     result = await db.execute(query)
     campaign = result.scalar_one_or_none()
@@ -94,13 +95,13 @@ async def get_campaign_messages(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ) -> list[CampaignMessageLogResponse]:
     """Get message logs for a specific campaign."""
     # Verify campaign belongs to advisor
     campaign_query = select(CommunicationCampaign).where(
         CommunicationCampaign.id == campaign_id,
-        CommunicationCampaign.advisor_id == current_user["id"],
+        CommunicationCampaign.advisor_id == current_user.id,
     )
     campaign_result = await db.execute(campaign_query)
     if not campaign_result.scalar_one_or_none():

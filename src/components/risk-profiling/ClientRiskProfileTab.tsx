@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -40,32 +40,17 @@ export const ClientRiskProfileTab = ({ clientId, clientName }: ClientRiskProfile
 
   const fetchProfiles = async () => {
     setLoading(true);
+    try {
+      // Fetch active profile
+      const active = await api.get<RiskProfile>(`/risk_profiles/active/${clientId}`);
+      setActiveProfile(active || null);
 
-    // Fetch active profile
-    const { data: active } = await supabase
-      .from('risk_profiles')
-      .select('*')
-      .eq('client_id', clientId)
-      .eq('is_active', true)
-      .single();
-
-    if (active) {
-      setActiveProfile(active as unknown as RiskProfile);
-    } else {
+      // Fetch history
+      const history = await api.get<RiskProfile[]>('/risk_profiles', { client_id: clientId });
+      if (history) setProfileHistory(history);
+    } catch {
       setActiveProfile(null);
     }
-
-    // Fetch history
-    const { data: history } = await supabase
-      .from('risk_profiles')
-      .select('*')
-      .eq('client_id', clientId)
-      .order('created_at', { ascending: false });
-
-    if (history) {
-      setProfileHistory(history as unknown as RiskProfile[]);
-    }
-
     setLoading(false);
   };
 

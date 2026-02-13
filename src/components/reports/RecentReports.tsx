@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { 
   FileText, Download, Calendar, Eye, Loader2,
   TrendingUp, PieChart, Calculator, Target, Receipt
@@ -47,15 +47,10 @@ export const RecentReports = ({ limit = 10, showHeader = true, onRefresh }: Rece
 
   const fetchReports = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('reports')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(limit);
-    
-    if (data) {
-      setReports(data);
-    }
+    try {
+      const data = await api.get<Report[]>('/reports', { limit });
+      if (data) setReports(data);
+    } catch { /* API client shows toast */ }
     setLoading(false);
   };
 

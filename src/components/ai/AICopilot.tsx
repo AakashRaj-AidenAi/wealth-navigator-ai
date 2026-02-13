@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import ReactMarkdown from 'react-markdown';
 import {
   Bot,
@@ -30,7 +30,7 @@ const quickActions = [
   { label: 'Investment Ideas', icon: Lightbulb, prompt: 'Suggest investment strategies for my high-net-worth clients' },
 ];
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/portfolio-copilot`;
+const CHAT_URL = `${import.meta.env.VITE_API_URL || '/api'}/insights/portfolio-copilot`;
 
 interface AICopilotProps {
   defaultMinimized?: boolean;
@@ -76,16 +76,16 @@ export const AICopilot = ({ defaultMinimized = false }: AICopilotProps) => {
     let assistantContent = "";
 
     try {
-      // Get current session for auth token
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      // Get JWT token from localStorage
+      const token = localStorage.getItem('access_token');
+
       const resp = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           messages: [...messages, userMessage].map(m => ({ role: m.role, content: m.content }))
         }),
       });

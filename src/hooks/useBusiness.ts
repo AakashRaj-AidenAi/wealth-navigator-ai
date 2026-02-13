@@ -1,12 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/services/api';
+import { api, extractItems } from '@/services/api';
 import { toast } from '@/hooks/use-toast';
 
 // ── Client AUM ──
 export const useClientAUM = () => {
   return useQuery({
     queryKey: ['client-aum'],
-    queryFn: () => api.get<any[]>('/clients/aum'),
+    queryFn: async () => {
+      const data = await api.get('/clients/aum');
+      return extractItems<any>(data);
+    },
   });
 };
 
@@ -38,7 +41,10 @@ export const useUpsertClientAUM = () => {
 export const useRevenueRecords = () => {
   return useQuery({
     queryKey: ['revenue-records'],
-    queryFn: () => api.get<any[]>('/reports/revenue'),
+    queryFn: async () => {
+      const data = await api.get('/reports/revenue');
+      return extractItems<any>(data);
+    },
   });
 };
 
@@ -83,7 +89,10 @@ export const useDeleteRevenue = () => {
 export const useCommissionRecords = () => {
   return useQuery({
     queryKey: ['commission-records'],
-    queryFn: () => api.get<any[]>('/reports/commissions'),
+    queryFn: async () => {
+      const data = await api.get('/reports/commissions');
+      return extractItems<any>(data);
+    },
   });
 };
 
@@ -127,7 +136,10 @@ export const useDeleteCommission = () => {
 export const useInvoices = () => {
   return useQuery({
     queryKey: ['invoices'],
-    queryFn: () => api.get<any[]>('/reports/invoices'),
+    queryFn: async () => {
+      const data = await api.get('/reports/invoices');
+      return extractItems<any>(data);
+    },
   });
 };
 
@@ -173,10 +185,11 @@ export const useDeleteInvoice = () => {
 export const usePayments = (invoiceId?: string) => {
   return useQuery({
     queryKey: ['payments', invoiceId],
-    queryFn: () => {
+    queryFn: async () => {
       const params: Record<string, string> = {};
       if (invoiceId) params.invoice_id = invoiceId;
-      return api.get<any[]>('/reports/payments', params);
+      const data = await api.get('/reports/payments', params);
+      return extractItems<any>(data);
     },
   });
 };

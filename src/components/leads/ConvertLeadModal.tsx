@@ -4,13 +4,30 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
 import { Loader2, UserCheck, ArrowRight, CheckCircle } from 'lucide-react';
-import type { Database } from '@/integrations/supabase/types';
 
-type Lead = Database['public']['Tables']['leads']['Row'];
+interface Lead {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  expected_value: number | null;
+  stage: string;
+  source: string | null;
+  lead_score: number | null;
+  probability: number | null;
+  notes: string | null;
+  converted_client_id: string | null;
+  converted_at: string | null;
+  last_activity_at: string | null;
+  loss_reason: string | null;
+  next_follow_up: string | null;
+  created_at: string;
+  assigned_to: string | null;
+}
 
 interface ConvertLeadModalProps {
   lead: Lead | null;
@@ -35,63 +52,55 @@ export const ConvertLeadModal = ({ lead, onClose, onSuccess }: ConvertLeadModalP
 
     setLoading(true);
 
-    // Create new client
-    const { data: client, error: clientError } = await supabase
-      .from('clients')
-      .insert({
+    try {
+      // Create new client
+      const client = await api.post<any>('/clients', {
         client_name: clientName.trim(),
         email: email.trim() || null,
         phone: phone.trim() || null,
         total_assets: parseFloat(totalAssets) || 0,
         advisor_id: user.id,
         status: 'active'
-      })
-      .select()
-      .single();
-
-    if (clientError) {
-      toast({
-        title: 'Error',
-        description: 'Failed to create client',
-        variant: 'destructive'
       });
-      setLoading(false);
-      return;
-    }
 
-    // Update lead with conversion info
-    await supabase
-      .from('leads')
-      .update({
+      // Update lead with conversion info
+      await api.put(`/leads/${lead.id}`, {
         converted_client_id: client.id,
         converted_at: new Date().toISOString(),
         stage: 'closed_won'
-      })
-      .eq('id', lead.id);
+      });
 
-    // Log conversion activity
-    await supabase.from('lead_activities').insert({
-      lead_id: lead.id,
-      activity_type: 'converted',
-      title: 'Lead converted to client',
-      description: `Successfully converted to client: ${clientName}`,
-      created_by: user.id
-    });
+      // Log conversion activity
+      await api.post('/lead_activities', {
+        lead_id: lead.id,
+        activity_type: 'converted',
+        title: 'Lead converted to client',
+        description: `Successfully converted to client: ${clientName}`,
+        created_by: user.id
+      });
 
-    // Create onboarding task for new client
-    await supabase.from('tasks').insert({
-      title: `Onboard new client: ${clientName}`,
-      description: `Complete onboarding process for newly converted client "${clientName}". Verify KYC, set up portfolio, and schedule initial review meeting.`,
-      priority: 'high',
-      status: 'todo',
-      due_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      client_id: client.id,
-      trigger_type: 'new_client',
-      assigned_to: user.id,
-      created_by: user.id
-    });
+      // Create onboarding task for new client
+      await api.post('/tasks', {
+        title: `Onboard new client: ${clientName}`,
+        description: `Complete onboarding process for newly converted client "${clientName}". Verify KYC, set up portfolio, and schedule initial review meeting.`,
+        priority: 'high',
+        status: 'todo',
+        due_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        client_id: client.id,
+        trigger_type: 'new_client',
+        assigned_to: user.id,
+        created_by: user.id
+      });
 
-    setStep('success');
+      setStep('success');
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to convert lead',
+        variant: 'destructive'
+      });
+    }
+
     setLoading(false);
   };
 

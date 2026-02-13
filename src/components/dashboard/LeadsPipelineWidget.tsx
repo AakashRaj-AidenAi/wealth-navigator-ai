@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -39,46 +39,49 @@ export const LeadsPipelineWidget = () => {
   const fetchPipelineData = async () => {
     if (!user) return;
 
-    const { data } = await supabase
-      .from('leads')
-      .select('stage, expected_value, probability')
-      .eq('assigned_to', user.id)
-      .neq('stage', 'lost');
+    try {
+      const dataRes = await api.get('/leads', {
+        assigned_to: user.id,
+        stage_neq: 'lost'
+      });
 
-    if (data) {
+      const data = extractItems<any>(dataRes);
+
       const stageMap = new Map<string, { count: number; value: number }>();
       let wonLeads = 0;
-      
-      data.forEach(lead => {
-        if (lead.stage === 'closed_won') wonLeads++;
-        const current = stageMap.get(lead.stage) || { count: 0, value: 0 };
-        const weightedValue = (Number(lead.expected_value) || 0) * (Number(lead.probability) || 0) / 100;
-        stageMap.set(lead.stage, {
-          count: current.count + 1,
-          value: current.value + weightedValue
-        });
-      });
 
-      const pipelineStages: PipelineStage[] = [];
-      Object.entries(stageConfig).forEach(([stage, config]) => {
-        const stageData = stageMap.get(stage);
-        if (stageData && stageData.count > 0) {
-          pipelineStages.push({
-            stage: config.label,
-            count: stageData.count,
-            value: stageData.value,
-            color: config.color
+      data.forEach(lead => {
+          if (lead.stage === 'closed_won') wonLeads++;
+          const current = stageMap.get(lead.stage) || { count: 0, value: 0 };
+          const weightedValue = (Number(lead.expected_value) || 0) * (Number(lead.probability) || 0) / 100;
+          stageMap.set(lead.stage, {
+            count: current.count + 1,
+            value: current.value + weightedValue
           });
-        }
-      });
+        });
+
+        const pipelineStages: PipelineStage[] = [];
+        Object.entries(stageConfig).forEach(([stage, config]) => {
+          const stageData = stageMap.get(stage);
+          if (stageData && stageData.count > 0) {
+            pipelineStages.push({
+              stage: config.label,
+              count: stageData.count,
+              value: stageData.value,
+              color: config.color
+            });
+          }
+        });
 
       const openLeads = data.filter(l => l.stage !== 'closed_won');
       setStages(pipelineStages);
       setTotalLeads(openLeads.length);
-      setTotalValue(openLeads.reduce((sum, l) => 
+      setTotalValue(openLeads.reduce((sum, l) =>
         sum + ((Number(l.expected_value) || 0) * (Number(l.probability) || 0) / 100), 0
       ));
       setWonCount(wonLeads);
+    } catch (err) {
+      console.error('Failed to load pipeline data:', err);
     }
 
     setLoading(false);

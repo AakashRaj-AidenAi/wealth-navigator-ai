@@ -9,19 +9,45 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Mail, Phone, Star, Calendar, Clock, MessageSquare, 
+import {
+  Mail, Phone, Star, Calendar, Clock, MessageSquare,
   UserCheck, Trash2, Activity, Send, CheckCircle, ExternalLink
 } from 'lucide-react';
-import type { Database } from '@/integrations/supabase/types';
 
-type Lead = Database['public']['Tables']['leads']['Row'];
-type LeadActivity = Database['public']['Tables']['lead_activities']['Row'];
+interface Lead {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  expected_value: number | null;
+  stage: string;
+  source: string | null;
+  lead_score: number | null;
+  probability: number | null;
+  notes: string | null;
+  converted_client_id: string | null;
+  converted_at: string | null;
+  last_activity_at: string | null;
+  loss_reason: string | null;
+  next_follow_up: string | null;
+  created_at: string;
+  assigned_to: string | null;
+}
+
+interface LeadActivity {
+  id: string;
+  lead_id: string;
+  activity_type: string;
+  title: string;
+  description: string | null;
+  created_by: string | null;
+  created_at: string;
+}
 
 interface LeadDetailModalProps {
   lead: Lead | null;
@@ -68,15 +94,14 @@ export const LeadDetailModal = ({ lead, onClose, onUpdate }: LeadDetailModalProp
 
   const fetchActivities = async () => {
     if (!lead) return;
-    
+
     setLoadingActivities(true);
-    const { data } = await supabase
-      .from('lead_activities')
-      .select('*')
-      .eq('lead_id', lead.id)
-      .order('created_at', { ascending: false });
-    
-    if (data) setActivities(data);
+    try {
+      const data = await api.get<LeadActivity[]>('/lead_activities', { lead_id: lead.id });
+      setActivities(data);
+    } catch {
+      // API client already shows toast on error
+    }
     setLoadingActivities(false);
   };
 
@@ -85,14 +110,13 @@ export const LeadDetailModal = ({ lead, onClose, onUpdate }: LeadDetailModalProp
       setClientInfo(null);
       return;
     }
-    
-    const { data } = await supabase
-      .from('clients')
-      .select('id, client_code, client_name')
-      .eq('id', lead.converted_client_id)
-      .single();
-    
-    if (data) setClientInfo(data);
+
+    try {
+      const data = await api.get<{ id: string; client_code: string; client_name: string }>(`/clients/${lead.converted_client_id}`);
+      setClientInfo(data);
+    } catch {
+      setClientInfo(null);
+    }
   };
 
   const handleViewClient = () => {
@@ -107,51 +131,44 @@ export const LeadDetailModal = ({ lead, onClose, onUpdate }: LeadDetailModalProp
 
     setAddingNote(true);
 
-    await supabase.from('lead_activities').insert({
-      lead_id: lead.id,
-      activity_type: 'note',
-      title: 'Note added',
-      description: newNote.trim(),
-      created_by: user.id
-    });
+    try {
+      await api.post('/lead_activities', {
+        lead_id: lead.id,
+        activity_type: 'note',
+        title: 'Note added',
+        description: newNote.trim(),
+        created_by: user.id
+      });
 
-    await supabase
-      .from('leads')
-      .update({ last_activity_at: new Date().toISOString() })
-      .eq('id', lead.id);
+      await api.put(`/leads/${lead.id}`, { last_activity_at: new Date().toISOString() });
 
-    toast({
-      title: 'Note Added',
-      description: 'Activity logged successfully'
-    });
+      toast({
+        title: 'Note Added',
+        description: 'Activity logged successfully'
+      });
 
-    setNewNote('');
-    fetchActivities();
-    onUpdate();
+      setNewNote('');
+      fetchActivities();
+      onUpdate();
+    } catch {
+      // API client already shows toast on error
+    }
     setAddingNote(false);
   };
 
   const handleDelete = async () => {
     if (!lead) return;
 
-    const { error } = await supabase
-      .from('leads')
-      .delete()
-      .eq('id', lead.id);
-
-    if (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to delete lead',
-        variant: 'destructive'
-      });
-    } else {
+    try {
+      await api.delete(`/leads/${lead.id}`);
       toast({
         title: 'Lead Deleted',
         description: `${lead.name} has been removed`
       });
       onClose();
       onUpdate();
+    } catch {
+      // API client already shows toast on error
     }
   };
 

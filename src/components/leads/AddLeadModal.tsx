@@ -7,12 +7,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
-import type { Database } from '@/integrations/supabase/types';
 
-type LeadSource = Database['public']['Enums']['lead_source'];
+type LeadSource = 'referral' | 'website' | 'social_media' | 'event' | 'cold_call' | 'advertisement' | 'partner' | 'other';
 
 interface AddLeadModalProps {
   open: boolean;
@@ -102,9 +101,8 @@ export const AddLeadModal = ({ open, onOpenChange, onSuccess }: AddLeadModalProp
 
     const leadScore = calculateLeadScore();
 
-    const { data: lead, error } = await supabase
-      .from('leads')
-      .insert({
+    try {
+      const lead = await api.post<any>('/leads', {
         name: name.trim(),
         email: email.trim() || null,
         phone: phone.trim() || null,
@@ -114,19 +112,10 @@ export const AddLeadModal = ({ open, onOpenChange, onSuccess }: AddLeadModalProp
         lead_score: leadScore,
         notes: notes.trim() || null,
         assigned_to: user.id
-      })
-      .select()
-      .single();
-
-    if (error) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive'
       });
-    } else {
+
       // Log initial activity
-      await supabase.from('lead_activities').insert({
+      await api.post('/lead_activities', {
         lead_id: lead.id,
         activity_type: 'created',
         title: 'Lead created',
@@ -135,7 +124,7 @@ export const AddLeadModal = ({ open, onOpenChange, onSuccess }: AddLeadModalProp
       });
 
       // Auto-create follow-up task
-      await supabase.from('tasks').insert({
+      await api.post('/tasks', {
         title: `Initial contact with ${name}`,
         description: `New lead "${name}" added. Make initial contact to qualify the opportunity.`,
         priority: leadScore >= 70 ? 'high' : 'medium',
@@ -150,10 +139,12 @@ export const AddLeadModal = ({ open, onOpenChange, onSuccess }: AddLeadModalProp
         title: 'Lead Added',
         description: `${name} has been added to your pipeline with a score of ${leadScore}.`
       });
-      
+
       resetForm();
       onOpenChange(false);
       onSuccess?.();
+    } catch {
+      // API client already shows toast on error
     }
 
     setLoading(false);

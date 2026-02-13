@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { MessageSquare, Mail, ArrowUpRight, ArrowDownLeft, Clock, CheckCircle, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -39,28 +39,17 @@ export const CommunicationHistory = ({ clientId, limit = 50, showClient = true }
 
   const fetchLogs = async () => {
     setLoading(true);
-    let query = supabase
-      .from('communication_logs')
-      .select('*')
-      .order('sent_at', { ascending: false })
-      .limit(limit);
+    try {
+      const params: Record<string, any> = { limit };
+      if (clientId) params.client_id = clientId;
+      const data = extractItems<CommunicationLog>(await api.get('/communication_logs', params));
 
-    if (clientId) {
-      query = query.eq('client_id', clientId);
-    }
-
-    const { data } = await query;
-
-    if (data) {
       // Fetch client names if needed
       if (showClient && !clientId) {
         const clientIds = [...new Set(data.map(l => l.client_id))];
-        const { data: clientData } = await supabase
-          .from('clients')
-          .select('id, client_name')
-          .in('id', clientIds);
-
-        const clientMap = new Map(clientData?.map(c => [c.id, c.client_name]) || []);
+        const clientRes = await api.get('/clients', { ids: clientIds.join(',') });
+        const clientData = extractItems<{ id: string; client_name: string }>(clientRes);
+        const clientMap = new Map(clientData.map(c => [c.id, c.client_name]));
 
         const enrichedData = data.map(log => ({
           ...log,
@@ -71,6 +60,8 @@ export const CommunicationHistory = ({ clientId, limit = 50, showClient = true }
       } else {
         setLogs(data);
       }
+    } catch {
+      // API client already shows toast on error
     }
     setLoading(false);
   };

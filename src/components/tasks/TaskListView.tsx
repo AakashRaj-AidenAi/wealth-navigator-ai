@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useNavigate } from 'react-router-dom';
 import { format, isToday, isPast, isTomorrow } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -49,47 +49,39 @@ export const TaskListView = ({ tasks, loading, onUpdate }: TaskListViewProps) =>
   const handleToggleComplete = async (task: Task) => {
     setUpdatingId(task.id);
     const newStatus = task.status === 'done' ? 'todo' : 'done';
-    
-    const { error } = await supabase
-      .from('tasks')
-      .update({ 
+
+    try {
+      await api.put(`/tasks/${task.id}`, {
         status: newStatus,
         completed_at: newStatus === 'done' ? new Date().toISOString() : null
-      })
-      .eq('id', task.id);
-
-    if (error) {
-      toast.error('Failed to update task');
-    } else {
+      });
       toast.success(newStatus === 'done' ? 'Task completed!' : 'Task reopened');
       onUpdate();
+    } catch {
+      toast.error('Failed to update task');
     }
     setUpdatingId(null);
   };
 
   const handleStatusChange = async (task: Task, newStatus: Task['status']) => {
-    const { error } = await supabase
-      .from('tasks')
-      .update({ 
+    try {
+      await api.put(`/tasks/${task.id}`, {
         status: newStatus,
         completed_at: newStatus === 'done' ? new Date().toISOString() : null
-      })
-      .eq('id', task.id);
-
-    if (error) {
-      toast.error('Failed to update task');
-    } else {
+      });
       onUpdate();
+    } catch {
+      toast.error('Failed to update task');
     }
   };
 
   const handleDelete = async (taskId: string) => {
-    const { error } = await supabase.from('tasks').delete().eq('id', taskId);
-    if (error) {
-      toast.error('Failed to delete task');
-    } else {
+    try {
+      await api.delete(`/tasks/${taskId}`);
       toast.success('Task deleted');
       onUpdate();
+    } catch {
+      toast.error('Failed to delete task');
     }
   };
 

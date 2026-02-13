@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/currency';
@@ -91,13 +91,12 @@ export const ClientGoalsTab = ({ clientId }: ClientGoalsTabProps) => {
 
   const fetchGoals = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('client_life_goals')
-      .select('*')
-      .eq('client_id', clientId)
-      .order('priority', { ascending: true });
-
-    if (data) setGoals(data);
+    try {
+      const data = await api.get('/client_life_goals', { client_id: clientId });
+      setGoals(extractItems<LifeGoal>(data));
+    } catch (err) {
+      console.error('Failed to load goals:', err);
+    }
     setLoading(false);
   };
 
@@ -112,35 +111,34 @@ export const ClientGoalsTab = ({ clientId }: ClientGoalsTabProps) => {
     }
 
     setSaving(true);
-    const { error } = await supabase.from('client_life_goals').insert({
-      client_id: clientId,
-      goal_type: form.goal_type,
-      name: form.name,
-      description: form.description || null,
-      target_amount: form.target_amount ? parseFloat(form.target_amount) : null,
-      target_date: form.target_date || null,
-      priority: form.priority
-    });
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.post('/client_life_goals', {
+        client_id: clientId,
+        goal_type: form.goal_type,
+        name: form.name,
+        description: form.description || null,
+        target_amount: form.target_amount ? parseFloat(form.target_amount) : null,
+        target_date: form.target_date || null,
+        priority: form.priority
+      });
       toast({ title: 'Success', description: 'Goal added' });
       setModalOpen(false);
       setForm({ goal_type: '', name: '', description: '', target_amount: '', target_date: '', priority: 'medium' });
       fetchGoals();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to add goal', variant: 'destructive' });
     }
     setSaving(false);
   };
 
   const handleDelete = async () => {
     if (!goalToDelete) return;
-    const { error } = await supabase.from('client_life_goals').delete().eq('id', goalToDelete);
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.delete('/client_life_goals/' + goalToDelete);
       toast({ title: 'Deleted', description: 'Goal removed' });
       fetchGoals();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to delete goal', variant: 'destructive' });
     }
     setDeleteDialogOpen(false);
     setGoalToDelete(null);

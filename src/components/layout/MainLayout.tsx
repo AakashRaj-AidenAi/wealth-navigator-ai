@@ -2,8 +2,7 @@ import { ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { CommandPalette } from '@/components/CommandPalette';
-import { ChatSidebar } from '@/components/chat/ChatSidebar';
-import { useChatSidebar } from '@/hooks/useChatSidebar';
+import { useSidebarState } from '@/hooks/useSidebarState';
 import { cn } from '@/lib/utils';
 
 interface MainLayoutProps {
@@ -11,21 +10,28 @@ interface MainLayoutProps {
 }
 
 export const MainLayout = ({ children }: MainLayoutProps) => {
-  const { isOpen: chatOpen, toggle: toggleChat, close: closeChat } = useChatSidebar();
+  const { expanded, toggle, mode, openChat, closeChat } = useSidebarState();
 
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar />
-      <div className={cn(
-        "ml-16 flex flex-col min-h-screen transition-all duration-300",
-        chatOpen && "mr-[380px]"
-      )}>
-        <Header onToggleChat={toggleChat} chatOpen={chatOpen} />
+      <Sidebar
+        expanded={expanded}
+        onToggle={toggle}
+        mode={mode}
+        onOpenChat={openChat}
+        onCloseChat={closeChat}
+      />
+      <div
+        className={cn(
+          'flex flex-col min-h-screen transition-all duration-200 ease-in-out',
+          expanded ? 'ml-64' : 'ml-16'
+        )}
+      >
+        <Header />
         <main className="flex-1 p-6">
           {children}
         </main>
       </div>
-      <ChatSidebar isOpen={chatOpen} onClose={closeChat} />
       <CommandPalette />
     </div>
   );

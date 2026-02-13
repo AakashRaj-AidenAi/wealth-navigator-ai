@@ -40,7 +40,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { OnboardingWizard } from '@/components/onboarding';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
 import { useEngagementScores } from '@/hooks/useEngagementScores';
@@ -106,24 +106,17 @@ const Clients = () => {
 
   const fetchClients = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('clients')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (data) {
-      setClients(data);
-    }
+    try {
+      const [clientsRes, tagsRes] = await Promise.all([
+        api.get('/clients', { order: 'created_at.desc' }),
+        api.get('/client-tags').catch(() => [])
+      ]);
 
-    // Fetch all client tags for filtering
-    const { data: tagsData } = await supabase
-      .from('client_tags')
-      .select('client_id, tag');
-    
-    if (tagsData) {
-      setClientTags(tagsData);
+      setClients(extractItems<Client>(clientsRes));
+      setClientTags(extractItems<ClientTag>(tagsRes));
+    } catch (err) {
+      console.error('Failed to load clients:', err);
     }
-
     setLoading(false);
   };
 

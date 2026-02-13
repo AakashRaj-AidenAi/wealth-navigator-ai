@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PortfolioMetrics } from '@/components/portfolio/PortfolioMetrics';
 import { AssetAllocationChart, AllocationItem } from '@/components/portfolio/AssetAllocationChart';
@@ -153,25 +153,29 @@ export const ClientPortfolioTab = ({ clientId, totalAssets }: ClientPortfolioTab
 
   useEffect(() => {
     const fetchData = async () => {
-      const [goalsResult, ordersResult] = await Promise.all([
-        supabase.from('goals').select('*').eq('client_id', clientId),
-        supabase.from('orders').select('*').eq('client_id', clientId).order('created_at', { ascending: true }),
-      ]);
+      try {
+        const [goalsData, ordersData] = await Promise.all([
+          api.get<any[]>('/goals', { client_id: clientId }),
+          api.get<any[]>('/orders', { client_id: clientId }),
+        ]);
 
-      if (goalsResult.data) {
-        setGoals(goalsResult.data.map(g => ({
-          id: g.id,
-          name: g.name,
-          targetAmount: g.target_amount,
-          currentAmount: g.current_amount || 0,
-          targetDate: g.target_date,
-          status: g.status || 'active',
-          priority: g.priority || 'medium',
-        })));
-      }
+        if (goalsData) {
+          setGoals(goalsData.map(g => ({
+            id: g.id,
+            name: g.name,
+            targetAmount: g.target_amount,
+            currentAmount: g.current_amount || 0,
+            targetDate: g.target_date,
+            status: g.status || 'active',
+            priority: g.priority || 'medium',
+          })));
+        }
 
-      if (ordersResult.data) {
-        setOrders(ordersResult.data);
+        if (ordersData) {
+          setOrders(ordersData);
+        }
+      } catch (err) {
+        console.error('Failed to load portfolio data:', err);
       }
 
       setLoading(false);

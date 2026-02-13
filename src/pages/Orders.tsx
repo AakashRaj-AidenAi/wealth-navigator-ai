@@ -14,7 +14,7 @@ import {
   Wallet, AlertTriangle, ArrowUpRight, IndianRupee, CalendarClock,
 } from 'lucide-react';
 import { NewOrderModal } from '@/components/modals/NewOrderModal';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/currency';
 import { useToast } from '@/hooks/use-toast';
@@ -84,31 +84,41 @@ const Orders = () => {
 
   const fetchOrders = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('orders')
-      .select('*, clients (client_name)')
-      .order('created_at', { ascending: false });
-    if (data) setOrders(data as Order[]);
+    try {
+      const response = await api.get('/orders', { include: 'clients', order: 'created_at.desc' });
+      const data = extractItems<Order>(response);
+      setOrders(data);
+    } catch (err) {
+      console.error('Failed to load orders:', err);
+    }
     setLoading(false);
   };
 
   const fetchFundingDashboard = async () => {
     if (!user) return;
-    const [balancesRes, pendingRes, settlementsRes, failedRes] = await Promise.all([
-      supabase.from('cash_balances').select('available_cash').eq('advisor_id', user.id),
-      supabase.from('funding_requests').select('amount').eq('initiated_by', user.id).not('workflow_stage', 'in', '("completed","failed")'),
-      supabase.from('funding_requests').select('id, settlement_date').eq('initiated_by', user.id).not('workflow_stage', 'in', '("completed","failed")').not('settlement_date', 'is', null),
-      supabase.from('funding_requests').select('id').eq('initiated_by', user.id).eq('workflow_stage', 'failed'),
-    ]);
-    setTotalAvailableCash((balancesRes.data || []).reduce((s, b) => s + Number(b.available_cash), 0));
-    setPendingFundingAmount((pendingRes.data || []).reduce((s, r) => s + Number(r.amount), 0));
-    const upcoming = (settlementsRes.data || []).filter(r => {
-      if (!r.settlement_date) return false;
-      const days = differenceInDays(new Date(r.settlement_date), new Date());
-      return days >= 0 && days <= 3;
-    });
-    setUpcomingSettlements(upcoming.length);
-    setFailedFundingCount((failedRes.data || []).length);
+    try {
+      const [balancesResp, pendingResp, allResp, failedResp] = await Promise.all([
+        api.get('/funding/cash-balances', { advisor_id: user.id }),
+        api.get('/funding/requests', { initiated_by: user.id, exclude_stages: 'completed,failed' }),
+        api.get('/funding/requests', { initiated_by: user.id, exclude_stages: 'completed,failed', has_settlement_date: true }),
+        api.get('/funding/requests', { initiated_by: user.id, workflow_stage: 'failed' }),
+      ]);
+      const balances = extractItems<any>(balancesResp);
+      const pendingRequests = extractItems<any>(pendingResp);
+      const allRequests = extractItems<any>(allResp);
+      const failedRequests = extractItems<any>(failedResp);
+      setTotalAvailableCash(balances.reduce((s: number, b: any) => s + Number(b.available_cash), 0));
+      setPendingFundingAmount(pendingRequests.reduce((s: number, r: any) => s + Number(r.amount), 0));
+      const upcoming = allRequests.filter((r: any) => {
+        if (!r.settlement_date) return false;
+        const days = differenceInDays(new Date(r.settlement_date), new Date());
+        return days >= 0 && days <= 3;
+      });
+      setUpcomingSettlements(upcoming.length);
+      setFailedFundingCount(failedRequests.length);
+    } catch (err) {
+      console.error('Failed to load funding dashboard:', err);
+    }
   };
 
   useEffect(() => {
@@ -121,43 +131,40 @@ const Orders = () => {
 
   const handleOrderAction = async (orderId: string, action: 'execute' | 'cancel') => {
     setActionLoading(orderId);
-    
-    const updateData = action === 'execute' 
+
+    const updateData = action === 'execute'
       ? { status: 'executed' as const, executed_at: new Date().toISOString() }
       : { status: 'cancelled' as const };
 
-    const { error } = await supabase
-      .from('orders')
-      .update(updateData)
-      .eq('id', orderId);
+    try {
+      await api.put('/orders/' + orderId, updateData);
 
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
       // On execution: deduct pending_cash (already reserved)
       // On cancellation: release reserved cash back to available
       if (confirmDialog && confirmDialog.orderType === 'buy' && confirmDialog.totalAmount && confirmDialog.totalAmount > 0) {
-        const { data: bal } = await supabase
-          .from('cash_balances')
-          .select('id, available_cash, pending_cash')
-          .eq('client_id', confirmDialog.clientId)
-          .maybeSingle();
+        try {
+          const balancesResp = await api.get('/funding/cash-balances', { client_id: confirmDialog.clientId });
+          const balances = extractItems<any>(balancesResp);
+          const bal = balances[0];
 
-        if (bal) {
-          if (action === 'execute') {
-            // Deduct from pending (cash is consumed)
-            await supabase.from('cash_balances').update({
-              pending_cash: Math.max(0, Number(bal.pending_cash) - confirmDialog.totalAmount),
-              last_updated: new Date().toISOString(),
-            }).eq('id', bal.id);
-          } else {
-            // Cancel: release reserved cash back to available
-            await supabase.from('cash_balances').update({
-              available_cash: Number(bal.available_cash) + confirmDialog.totalAmount,
-              pending_cash: Math.max(0, Number(bal.pending_cash) - confirmDialog.totalAmount),
-              last_updated: new Date().toISOString(),
-            }).eq('id', bal.id);
+          if (bal) {
+            if (action === 'execute') {
+              // Deduct from pending (cash is consumed)
+              await api.put('/funding/cash-balances/' + bal.id, {
+                pending_cash: Math.max(0, Number(bal.pending_cash) - confirmDialog.totalAmount),
+                last_updated: new Date().toISOString(),
+              });
+            } else {
+              // Cancel: release reserved cash back to available
+              await api.put('/funding/cash-balances/' + bal.id, {
+                available_cash: Number(bal.available_cash) + confirmDialog.totalAmount,
+                pending_cash: Math.max(0, Number(bal.pending_cash) - confirmDialog.totalAmount),
+                last_updated: new Date().toISOString(),
+              });
+            }
           }
+        } catch (balErr) {
+          console.error('Failed to update cash balance:', balErr);
         }
       }
 
@@ -167,8 +174,10 @@ const Orders = () => {
       });
       fetchOrders();
       fetchFundingDashboard();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to update order', variant: 'destructive' });
     }
-    
+
     setActionLoading(null);
     setConfirmDialog(null);
   };

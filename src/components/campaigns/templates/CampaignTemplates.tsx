@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -138,12 +138,12 @@ export function CampaignTemplates() {
 
   const fetchTemplates = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('message_templates')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (data) setTemplates(data as Template[]);
-    if (error) console.error('Error fetching templates:', error);
+    try {
+      const data = await api.get<Template[]>('/message_templates');
+      setTemplates(data ?? []);
+    } catch (err) {
+      console.error('Error fetching templates:', err);
+    }
     setLoading(false);
   };
 
@@ -155,13 +155,13 @@ export function CampaignTemplates() {
   const seedPrebuiltTemplates = async () => {
     if (!user?.id) return;
     setSubmitting(true);
-    const toInsert = PREBUILT_TEMPLATES.map(t => ({ ...t, created_by: user.id }));
-    const { error } = await supabase.from('message_templates').insert(toInsert);
-    if (error) {
-      toast.error(error.message);
-    } else {
+    try {
+      const toInsert = PREBUILT_TEMPLATES.map(t => ({ ...t, created_by: user.id }));
+      await api.post('/message_templates/bulk', toInsert);
       toast.success(`${PREBUILT_TEMPLATES.length} pre-built templates added!`);
       fetchTemplates();
+    } catch {
+      // API client already shows toast on error
     }
     setSubmitting(false);
   };
@@ -175,19 +175,26 @@ export function CampaignTemplates() {
     const variables = extractVariables(content + (subject || ''));
     const templateData = { name, category, channel, subject: subject || null, content, variables, is_active: isActive, created_by: user.id };
 
-    const { error } = editingTemplate
-      ? await supabase.from('message_templates').update(templateData).eq('id', editingTemplate.id)
-      : await supabase.from('message_templates').insert(templateData);
-
-    if (error) { toast.error(error.message); }
-    else { toast.success(`Template ${editingTemplate ? 'updated' : 'created'}`); setModalOpen(false); resetForm(); fetchTemplates(); }
+    try {
+      if (editingTemplate) {
+        await api.put(`/message_templates/${editingTemplate.id}`, templateData);
+      } else {
+        await api.post('/message_templates', templateData);
+      }
+      toast.success(`Template ${editingTemplate ? 'updated' : 'created'}`); setModalOpen(false); resetForm(); fetchTemplates();
+    } catch {
+      // API client already shows toast on error
+    }
     setSubmitting(false);
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from('message_templates').delete().eq('id', id);
-    if (error) toast.error(error.message);
-    else { toast.success('Template deleted'); fetchTemplates(); }
+    try {
+      await api.delete(`/message_templates/${id}`);
+      toast.success('Template deleted'); fetchTemplates();
+    } catch {
+      // API client already shows toast on error
+    }
   };
 
   const handleEdit = (t: Template) => {
@@ -197,12 +204,15 @@ export function CampaignTemplates() {
 
   const handleDuplicate = async (t: Template) => {
     if (!user?.id) return;
-    const { error } = await supabase.from('message_templates').insert({
-      name: `${t.name} (Copy)`, category: t.category, channel: t.channel,
-      subject: t.subject, content: t.content, variables: t.variables, is_active: true, created_by: user.id,
-    });
-    if (error) toast.error(error.message);
-    else { toast.success('Template duplicated'); fetchTemplates(); }
+    try {
+      await api.post('/message_templates', {
+        name: `${t.name} (Copy)`, category: t.category, channel: t.channel,
+        subject: t.subject, content: t.content, variables: t.variables, is_active: true, created_by: user.id,
+      });
+      toast.success('Template duplicated'); fetchTemplates();
+    } catch {
+      // API client already shows toast on error
+    }
   };
 
   const resetForm = () => {

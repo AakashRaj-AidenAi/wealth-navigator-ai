@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { MessageSquare, Plus, Phone, Mail, Video, FileText, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -54,27 +54,21 @@ export const CommunicationLogs = () => {
   }, []);
 
   const fetchClients = async () => {
-    const { data } = await supabase.from('clients').select('id, client_name').order('client_name');
-    if (data) setClients(data);
+    try {
+      const data = await api.get('/clients');
+      setClients(extractItems<{ id: string; client_name: string }>(data));
+    } catch { /* API client shows toast */ }
   };
 
   const fetchLogs = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('communication_logs')
-      .select('*')
-      .order('sent_at', { ascending: false })
-      .limit(50);
-
-    if (data) {
+    try {
+      const data = extractItems<CommunicationLog>(await api.get('/communication_logs', { limit: 50 }));
       // Fetch client names separately
       const clientIds = [...new Set(data.map(l => l.client_id))];
-      const { data: clientData } = await supabase
-        .from('clients')
-        .select('id, client_name')
-        .in('id', clientIds);
-
-      const clientMap = new Map(clientData?.map(c => [c.id, c.client_name]) || []);
+      const clientRes = await api.get('/clients');
+      const clientData = extractItems<{ id: string; client_name: string }>(clientRes);
+      const clientMap = new Map(clientData.map(c => [c.id, c.client_name]));
 
       const enrichedData = data.map(log => ({
         ...log,
@@ -82,7 +76,7 @@ export const CommunicationLogs = () => {
       }));
 
       setLogs(enrichedData);
-    }
+    } catch { /* API client shows toast */ }
     setLoading(false);
   };
 
@@ -93,23 +87,22 @@ export const CommunicationLogs = () => {
     }
 
     setSubmitting(true);
-    const { error } = await supabase.from('communication_logs').insert({
-      client_id: selectedClient,
-      communication_type: commType,
-      direction,
-      subject: subject || null,
-      content: content || null,
-      sent_by: user?.id,
-      sent_at: new Date().toISOString()
-    });
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.post('/communication_logs', {
+        client_id: selectedClient,
+        communication_type: commType,
+        direction,
+        subject: subject || null,
+        content: content || null,
+        sent_by: user?.id,
+        sent_at: new Date().toISOString()
+      });
       toast({ title: 'Success', description: 'Communication logged' });
       setAddModalOpen(false);
       resetForm();
       fetchLogs();
+    } catch {
+      // API client already shows toast on error
     }
     setSubmitting(false);
   };

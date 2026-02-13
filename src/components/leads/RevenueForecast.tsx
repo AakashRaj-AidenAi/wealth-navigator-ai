@@ -2,10 +2,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrencyShort } from '@/lib/currency';
 import { TrendingUp, Calendar, Target, DollarSign } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import type { Database } from '@/integrations/supabase/types';
+interface Lead {
+  id: string;
+  name: string;
+  expected_value: number | null;
+  stage: LeadStage;
+  probability: number | null;
+  converted_at: string | null;
+  created_at: string;
+}
 
-type Lead = Database['public']['Tables']['leads']['Row'];
-type LeadStage = Database['public']['Enums']['lead_stage'];
+type LeadStage = 'new' | 'contacted' | 'meeting' | 'proposal' | 'closed_won' | 'lost';
 
 interface RevenueForecastProps {
   leads: Lead[];

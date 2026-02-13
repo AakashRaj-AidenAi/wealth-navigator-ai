@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { api } from '@/services/api';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -27,8 +27,8 @@ export const useChurnPredictions = () => {
     if (!user) return;
     setLoading(true);
     try {
-      const data = await api.get<ChurnPrediction[]>('/insights/churn-predictions');
-      setPredictions(data);
+      const data = await api.get('/insights/churn-predictions');
+      setPredictions(extractItems<ChurnPrediction>(data));
     } catch (error) {
       console.error('Error fetching churn predictions:', error);
     } finally {

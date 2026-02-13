@@ -59,7 +59,7 @@ class CommunicationLog(BaseMixin, Base):
     opened_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    extra_data: Mapped[Optional[dict]] = mapped_column("metadata", JSON, nullable=True)
 
     # -- relationships -------------------------------------------------------
     client: Mapped[Optional["Client"]] = relationship(

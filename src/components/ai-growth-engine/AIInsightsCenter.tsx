@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -60,40 +60,13 @@ export const AIInsightsCenter = () => {
 
   const fetchInsights = async (showToast = false) => {
     if (!user) return;
-    
+
     try {
       if (showToast) setRefreshing(true);
-      
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) {
-        setLoading(false);
-        return;
-      }
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-growth-engine`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.session.access_token}`,
-          },
-          body: JSON.stringify({ action: 'full_scan' }),
-        }
-      );
+      const result = await api.post<GrowthEngineData>('/insights/ai-growth-engine', { action: 'full_scan' });
+      if (result) setData(result);
 
-      if (!response.ok) {
-        if (response.status === 429) {
-          toast.error('AI rate limit reached. Try again later.');
-        } else if (response.status === 402) {
-          toast.error('AI usage limit reached.');
-        }
-        return;
-      }
-
-      const result = await response.json();
-      setData(result);
-      
       if (showToast) {
         toast.success('AI insights refreshed');
       }

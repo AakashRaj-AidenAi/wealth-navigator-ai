@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   Search, Users, FileText, Send, ChevronRight, ChevronLeft,
@@ -93,12 +93,10 @@ export const ReportWorkflow = ({ onComplete }: ReportWorkflowProps) => {
 
   const fetchClients = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('clients')
-      .select('id, client_name, email, phone, total_assets')
-      .order('client_name');
-    
-    if (data) setClients(data);
+    try {
+      const data = await api.get<Client[]>('/clients');
+      if (data) setClients(data);
+    } catch { /* API client shows toast */ }
     setLoading(false);
   };
 
@@ -134,13 +132,10 @@ export const ReportWorkflow = ({ onComplete }: ReportWorkflowProps) => {
       if (!client) continue;
 
       // Fetch real data for this client
-      const [goalsRes, ordersRes] = await Promise.all([
-        supabase.from('goals').select('*').eq('client_id', clientId),
-        supabase.from('orders').select('*').eq('client_id', clientId).eq('status', 'executed')
+      const [goals, orders] = await Promise.all([
+        api.get<any[]>('/goals', { client_id: clientId }).catch(() => []),
+        api.get<any[]>('/orders', { client_id: clientId, status: 'executed' }).catch(() => [])
       ]);
-
-      const goals = goalsRes.data || [];
-      const orders = ordersRes.data || [];
 
       // Generate report data based on type
       const reportData = generateReportData(selectedReport, client, goals, orders);
@@ -254,16 +249,18 @@ export const ReportWorkflow = ({ onComplete }: ReportWorkflowProps) => {
   const handleDeliveryComplete = async () => {
     // Save reports to database
     if (!user) return;
-    
-    for (const report of generatedReports) {
-      await supabase.from('reports').insert({
-        report_type: 'performance', // Map to existing enum
-        title: `${reportTypes.find(r => r.id === report.reportType)?.name} - ${report.client.client_name}`,
-        description: `Generated for ${report.client.client_name}`,
-        generated_by: user.id,
-        data: report.data
-      });
-    }
+
+    try {
+      for (const report of generatedReports) {
+        await api.post('/reports', {
+          report_type: 'performance', // Map to existing enum
+          title: `${reportTypes.find(r => r.id === report.reportType)?.name} - ${report.client.client_name}`,
+          description: `Generated for ${report.client.client_name}`,
+          generated_by: user.id,
+          data: report.data
+        });
+      }
+    } catch { /* API client shows toast */ }
 
     onComplete?.();
   };

@@ -30,13 +30,13 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     agent_name: str | None
-    metadata: dict | None
+    extra_data: dict | None = Field(None, alias="metadata")
     token_count: int | None
     model_used: str | None
     response_time_ms: int | None
     created_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "populate_by_name": True}
 
 class ConversationListResponse(BaseModel):
     conversations: list[ConversationResponse]
@@ -53,7 +53,7 @@ class WSMessageEvent(BaseModel):
     type: str = "message"
     conversation_id: str | None = None
     content: str
-    metadata: dict = Field(default_factory=dict)
+    extra_data: dict = Field(default_factory=dict, alias="metadata")
 
 class WSStreamStartEvent(BaseModel):
     """Server → Client: stream starting."""
@@ -75,7 +75,7 @@ class WSStreamEndEvent(BaseModel):
     conversation_id: str
     full_content: str
     actions: list[dict] = Field(default_factory=list)
-    metadata: dict = Field(default_factory=dict)
+    extra_data: dict = Field(default_factory=dict, alias="metadata")
 
 class WSAgentStatusEvent(BaseModel):
     """Server → Client: agent thinking/tool status."""

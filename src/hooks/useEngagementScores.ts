@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { api } from '@/services/api';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -27,8 +27,8 @@ export const useEngagementScores = () => {
     if (!user) return;
     setLoading(true);
     try {
-      const data = await api.get<EngagementScore[]>('/insights/engagement-scores');
-      setScores(data);
+      const data = await api.get('/insights/engagement-scores');
+      setScores(extractItems<EngagementScore>(data));
     } catch (error) {
       console.error('Error fetching engagement scores:', error);
     } finally {

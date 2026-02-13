@@ -10,10 +10,25 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, Sector, FunnelChart, Funnel, LabelList
 } from 'recharts';
-import type { Database } from '@/integrations/supabase/types';
+interface Lead {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  expected_value: number | null;
+  stage: string;
+  source: string | null;
+  lead_score: number | null;
+  probability: number | null;
+  notes: string | null;
+  converted_client_id: string | null;
+  converted_at: string | null;
+  last_activity_at: string | null;
+  loss_reason: string | null;
+  created_at: string;
+}
 
-type Lead = Database['public']['Tables']['leads']['Row'];
-type LeadStage = Database['public']['Enums']['lead_stage'];
+type LeadStage = 'new' | 'contacted' | 'meeting' | 'proposal' | 'closed_won' | 'lost';
 
 interface PipelineAnalyticsProps {
   leads: Lead[];

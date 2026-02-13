@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useInvoices, useUpsertInvoice, usePayments, useUpsertPayment } from '@/hooks/useBusiness';
 import { formatCurrency } from '@/lib/currency';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
@@ -49,10 +49,7 @@ const Invoices = () => {
 
   const { data: clients } = useQuery({
     queryKey: ['clients-select'],
-    queryFn: async () => {
-      const { data } = await supabase.from('clients').select('id, client_name, total_assets').order('client_name');
-      return data ?? [];
-    },
+    queryFn: () => api.get<any[]>('/clients', { fields: 'id,client_name,total_assets', order: 'client_name' }),
   });
 
   // Analytics

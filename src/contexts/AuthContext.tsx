@@ -21,13 +21,11 @@ interface AuthUser {
 }
 
 /**
- * Lightweight session shim for components that use
- * `supabase.auth.getSession()` style patterns like
- * `session.session.access_token` or `session.session.user.id`.
+ * Lightweight session shim for components that need
+ * access to session data like `session.access_token` or `session.user.id`.
  *
- * Components that still call supabase.auth.getSession() directly will
- * need separate migration, but those consuming session from AuthContext
- * will work via this shim.
+ * Components consuming session from AuthContext will have access
+ * to the current user and access token through this interface.
  */
 interface SessionShim {
   access_token: string;

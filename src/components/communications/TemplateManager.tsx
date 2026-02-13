@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { FileText, Plus, Edit, Trash2, Mail, MessageSquare, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -72,13 +72,12 @@ export const TemplateManager = () => {
 
   const fetchTemplates = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('message_templates')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (data) setTemplates(data);
-    if (error) console.error('Error fetching templates:', error);
+    try {
+      const data = await api.get('/message_templates');
+      setTemplates(extractItems<MessageTemplate>(data));
+    } catch (err) {
+      console.error('Error fetching templates:', err);
+    }
     setLoading(false);
   };
 
@@ -107,38 +106,29 @@ export const TemplateManager = () => {
       created_by: user?.id
     };
 
-    let error;
-    if (editingTemplate) {
-      const { error: updateError } = await supabase
-        .from('message_templates')
-        .update(templateData)
-        .eq('id', editingTemplate.id);
-      error = updateError;
-    } else {
-      const { error: insertError } = await supabase
-        .from('message_templates')
-        .insert(templateData);
-      error = insertError;
-    }
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      if (editingTemplate) {
+        await api.put(`/message_templates/${editingTemplate.id}`, templateData);
+      } else {
+        await api.post('/message_templates', templateData);
+      }
       toast({ title: 'Success', description: `Template ${editingTemplate ? 'updated' : 'created'}` });
       setModalOpen(false);
       resetForm();
       fetchTemplates();
+    } catch {
+      // API client already shows toast on error
     }
     setSubmitting(false);
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from('message_templates').delete().eq('id', id);
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.delete(`/message_templates/${id}`);
       toast({ title: 'Success', description: 'Template deleted' });
       fetchTemplates();
+    } catch {
+      // API client already shows toast on error
     }
   };
 
@@ -154,22 +144,21 @@ export const TemplateManager = () => {
   };
 
   const handleDuplicate = async (template: MessageTemplate) => {
-    const { error } = await supabase.from('message_templates').insert({
-      name: `${template.name} (Copy)`,
-      category: template.category,
-      channel: template.channel,
-      subject: template.subject,
-      content: template.content,
-      variables: template.variables,
-      is_active: true,
-      created_by: user?.id
-    });
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await api.post('/message_templates', {
+        name: `${template.name} (Copy)`,
+        category: template.category,
+        channel: template.channel,
+        subject: template.subject,
+        content: template.content,
+        variables: template.variables,
+        is_active: true,
+        created_by: user?.id
+      });
       toast({ title: 'Success', description: 'Template duplicated' });
       fetchTemplates();
+    } catch {
+      // API client already shows toast on error
     }
   };
 

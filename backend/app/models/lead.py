@@ -98,7 +98,7 @@ class LeadActivity(BaseMixin, Base):
     )  # call | email | meeting | note | proposal_sent | follow_up
     title: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    extra_data: Mapped[Optional[dict]] = mapped_column("metadata", JSON, nullable=True)
 
     # -- relationships -------------------------------------------------------
     lead: Mapped["Lead"] = relationship(back_populates="activities")

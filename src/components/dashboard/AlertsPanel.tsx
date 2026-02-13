@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { Shield, TrendingUp, Users, ChevronRight, Clock, AlertTriangle } from 'lucide-react';
 
 interface Alert {
@@ -52,94 +52,94 @@ export const AlertsPanel = () => {
 
   useEffect(() => {
     const generateAlerts = async () => {
-      // Fetch real data to generate contextual alerts
-      const { data: clients } = await supabase
-        .from('clients')
-        .select('client_name, risk_profile, total_assets');
+      try {
+        // Fetch real data to generate contextual alerts
+        const [clientsRes, ordersRes, goalsRes] = await Promise.all([
+          api.get('/clients'),
+          api.get('/orders', { status: 'pending', _limit: '5' }),
+          api.get('/goals'),
+        ]);
 
-      const { data: orders } = await supabase
-        .from('orders')
-        .select('symbol, status, client_id, created_at')
-        .eq('status', 'pending')
-        .limit(5);
+        const clients = extractItems<any>(clientsRes);
+        const orders = extractItems<any>(ordersRes);
+        const goals = extractItems<any>(goalsRes);
 
-      const { data: goals } = await supabase
-        .from('goals')
-        .select('name, current_amount, target_amount, client_id');
+        const generatedAlerts: Alert[] = [];
 
-      const generatedAlerts: Alert[] = [];
+        // Generate alerts based on real data
+        if (clients.length > 0) {
+          // High concentration alert
+          const highValueClients = clients.filter(c => Number(c.total_assets) > 20000000);
+          if (highValueClients.length > 0) {
+            generatedAlerts.push({
+              id: '1',
+              title: 'High Value Client Review',
+              description: `${highValueClients[0].client_name} portfolio requires quarterly review`,
+              type: 'compliance',
+              severity: 'medium',
+              timestamp: new Date().toISOString()
+            });
+          }
 
-      // Generate alerts based on real data
-      if (clients && clients.length > 0) {
-        // High concentration alert
-        const highValueClients = clients.filter(c => Number(c.total_assets) > 20000000);
-        if (highValueClients.length > 0) {
+          // Risk profile distribution alert
+          const aggressiveClients = clients.filter(c => c.risk_profile === 'aggressive');
+          if (aggressiveClients.length > 0) {
+            generatedAlerts.push({
+              id: '2',
+              title: 'Aggressive Portfolio Monitoring',
+              description: `${aggressiveClients.length} client(s) with aggressive risk profile need monitoring`,
+              type: 'market',
+              severity: 'low',
+              timestamp: new Date(Date.now() - 3600000).toISOString()
+            });
+          }
+        }
+
+        // Pending orders alert
+        if (orders.length > 0) {
           generatedAlerts.push({
-            id: '1',
-            title: 'High Value Client Review',
-            description: `${highValueClients[0].client_name} portfolio requires quarterly review`,
+            id: '3',
+            title: 'Pending Orders',
+            description: `${orders.length} order(s) awaiting execution`,
+            type: 'rebalance',
+            severity: 'high',
+            timestamp: orders[0].created_at
+          });
+        }
+
+        // Goals progress alert
+        if (goals.length > 0) {
+          const behindGoals = goals.filter(g =>
+            (Number(g.current_amount) / Number(g.target_amount)) < 0.5
+          );
+          if (behindGoals.length > 0) {
+            generatedAlerts.push({
+              id: '4',
+              title: 'Goals Behind Schedule',
+              description: `${behindGoals.length} goal(s) are less than 50% complete`,
+              type: 'client',
+              severity: 'medium',
+              timestamp: new Date(Date.now() - 7200000).toISOString()
+            });
+          }
+        }
+
+        // If no real alerts, show placeholder
+        if (generatedAlerts.length === 0) {
+          generatedAlerts.push({
+            id: '0',
+            title: 'All Clear',
+            description: 'No pending alerts or issues to address',
             type: 'compliance',
-            severity: 'medium',
+            severity: 'low',
             timestamp: new Date().toISOString()
           });
         }
 
-        // Risk profile distribution alert
-        const aggressiveClients = clients.filter(c => c.risk_profile === 'aggressive');
-        if (aggressiveClients.length > 0) {
-          generatedAlerts.push({
-            id: '2',
-            title: 'Aggressive Portfolio Monitoring',
-            description: `${aggressiveClients.length} client(s) with aggressive risk profile need monitoring`,
-            type: 'market',
-            severity: 'low',
-            timestamp: new Date(Date.now() - 3600000).toISOString()
-          });
-        }
+        setAlerts(generatedAlerts);
+      } catch (err) {
+        console.error('Failed to load alerts:', err);
       }
-
-      // Pending orders alert
-      if (orders && orders.length > 0) {
-        generatedAlerts.push({
-          id: '3',
-          title: 'Pending Orders',
-          description: `${orders.length} order(s) awaiting execution`,
-          type: 'rebalance',
-          severity: 'high',
-          timestamp: orders[0].created_at
-        });
-      }
-
-      // Goals progress alert
-      if (goals && goals.length > 0) {
-        const behindGoals = goals.filter(g => 
-          (Number(g.current_amount) / Number(g.target_amount)) < 0.5
-        );
-        if (behindGoals.length > 0) {
-          generatedAlerts.push({
-            id: '4',
-            title: 'Goals Behind Schedule',
-            description: `${behindGoals.length} goal(s) are less than 50% complete`,
-            type: 'client',
-            severity: 'medium',
-            timestamp: new Date(Date.now() - 7200000).toISOString()
-          });
-        }
-      }
-
-      // If no real alerts, show placeholder
-      if (generatedAlerts.length === 0) {
-        generatedAlerts.push({
-          id: '0',
-          title: 'All Clear',
-          description: 'No pending alerts or issues to address',
-          type: 'compliance',
-          severity: 'low',
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      setAlerts(generatedAlerts);
       setLoading(false);
     };
 

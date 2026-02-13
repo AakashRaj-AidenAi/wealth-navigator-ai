@@ -13,6 +13,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     # Database
@@ -31,7 +32,17 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
         "http://localhost:5173",
+        "http://localhost:8080",
     ]
+
+    # SMTP (Google / Gmail)
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""  # Gmail App Password (not your login password)
+    SMTP_FROM_EMAIL: str = ""
+    SMTP_FROM_NAME: str = "WealthOS"
+    SMTP_USE_TLS: bool = True
 
     # Application
     APP_NAME: str = "WealthOS API"

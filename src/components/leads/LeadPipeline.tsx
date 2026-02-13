@@ -2,10 +2,21 @@ import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrencyShort } from '@/lib/currency';
 import { Phone, Mail, GripVertical, Star, CheckCircle, Lock } from 'lucide-react';
-import type { Database } from '@/integrations/supabase/types';
+interface Lead {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  expected_value: number | null;
+  stage: LeadStage;
+  source: string | null;
+  lead_score: number | null;
+  probability: number | null;
+  converted_client_id: string | null;
+  created_at: string;
+}
 
-type Lead = Database['public']['Tables']['leads']['Row'];
-type LeadStage = Database['public']['Enums']['lead_stage'];
+type LeadStage = 'new' | 'contacted' | 'meeting' | 'proposal' | 'closed_won' | 'lost';
 
 interface LeadPipelineProps {
   leads: Lead[];

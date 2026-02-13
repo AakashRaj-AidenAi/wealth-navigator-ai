@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
   Legend
 } from 'recharts';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface PerformanceData {
@@ -24,51 +24,53 @@ export const PerformanceChart = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      // Get orders grouped by month for the last 6 months
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      try {
+        // Get orders grouped by month for the last 6 months
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-      const { data: orders } = await supabase
-        .from('orders')
-        .select('created_at')
-        .gte('created_at', sixMonthsAgo.toISOString());
+        const [ordersRes, clientsRes] = await Promise.all([
+          api.get('/orders', { created_at_gte: sixMonthsAgo.toISOString() }),
+          api.get('/clients', { created_at_gte: sixMonthsAgo.toISOString() }),
+        ]);
 
-      const { data: clients } = await supabase
-        .from('clients')
-        .select('created_at')
-        .gte('created_at', sixMonthsAgo.toISOString());
+        const orders = extractItems<any>(ordersRes);
+        const clients = extractItems<any>(clientsRes);
 
-      // Generate last 6 months
-      const months = [];
-      for (let i = 5; i >= 0; i--) {
-        const date = new Date();
-        date.setMonth(date.getMonth() - i);
-        months.push({
-          month: date.toLocaleString('default', { month: 'short' }),
-          year: date.getFullYear(),
-          monthNum: date.getMonth()
+        // Generate last 6 months
+        const months = [];
+        for (let i = 5; i >= 0; i--) {
+          const date = new Date();
+          date.setMonth(date.getMonth() - i);
+          months.push({
+            month: date.toLocaleString('default', { month: 'short' }),
+            year: date.getFullYear(),
+            monthNum: date.getMonth()
+          });
+        }
+
+        const performanceData = months.map(m => {
+          const monthOrders = orders.filter(o => {
+            const d = new Date(o.created_at);
+            return d.getMonth() === m.monthNum && d.getFullYear() === m.year;
+          }).length;
+
+          const monthClients = clients.filter(c => {
+            const d = new Date(c.created_at);
+            return d.getMonth() === m.monthNum && d.getFullYear() === m.year;
+          }).length;
+
+          return {
+            month: m.month,
+            orders: monthOrders,
+            clients: monthClients
+          };
         });
+
+        setData(performanceData);
+      } catch (err) {
+        console.error('Failed to load performance data:', err);
       }
-
-      const performanceData = months.map(m => {
-        const monthOrders = orders?.filter(o => {
-          const d = new Date(o.created_at);
-          return d.getMonth() === m.monthNum && d.getFullYear() === m.year;
-        }).length || 0;
-
-        const monthClients = clients?.filter(c => {
-          const d = new Date(c.created_at);
-          return d.getMonth() === m.monthNum && d.getFullYear() === m.year;
-        }).length || 0;
-
-        return {
-          month: m.month,
-          orders: monthOrders,
-          clients: monthClients
-        };
-      });
-
-      setData(performanceData);
       setLoading(false);
     };
 

@@ -9,7 +9,7 @@ import {
 import { ReportWorkflow } from '@/components/reports/ReportWorkflow';
 import { RecentReports } from '@/components/reports/RecentReports';
 import { ScheduledReports } from '@/components/reports/ScheduledReports';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface ReportStats {
@@ -38,18 +38,24 @@ const Reports = () => {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-    const [allReports, monthlyReports] = await Promise.all([
-      supabase.from('reports').select('id', { count: 'exact', head: true }),
-      supabase.from('reports').select('id', { count: 'exact', head: true })
-        .gte('created_at', startOfMonth)
-    ]);
+    try {
+      const [allReports, monthlyReports] = await Promise.all([
+        api.get<any[]>('/reports'),
+        api.get<any[]>('/reports', { created_after: startOfMonth })
+      ]);
 
-    setStats({
-      totalGenerated: allReports.count || 0,
-      thisMonth: monthlyReports.count || 0,
-      scheduled: 3,
-      sent: Math.floor((monthlyReports.count || 0) * 0.8)
-    });
+      const totalCount = allReports?.length || 0;
+      const monthCount = monthlyReports?.length || 0;
+
+      setStats({
+        totalGenerated: totalCount,
+        thisMonth: monthCount,
+        scheduled: 3,
+        sent: Math.floor(monthCount * 0.8)
+      });
+    } catch (err) {
+      console.error('Failed to load report stats:', err);
+    }
   };
 
   const handleWorkflowComplete = () => {

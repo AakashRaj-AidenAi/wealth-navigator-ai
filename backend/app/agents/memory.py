@@ -69,7 +69,7 @@ class MemoryManager:
         role: str,
         content: str,
         db: AsyncSession,
-        metadata: dict | None = None,
+        extra_data: dict | None = None,
     ) -> Message:
         """Persist a message to the database."""
         message = Message(
@@ -77,7 +77,7 @@ class MemoryManager:
             conversation_id=uuid.UUID(conversation_id),
             role=role,
             content=content,
-            metadata=metadata or {},
+            extra_data=extra_data or {},
         )
         db.add(message)
         await db.flush()

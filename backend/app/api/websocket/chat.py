@@ -201,7 +201,7 @@ async def websocket_chat(websocket: WebSocket):
                     role="assistant",
                     content=full_content,
                     db=db,
-                    metadata={
+                    extra_data={
                         "agent": agent_name,
                         "intent": nlp_result.intent.name,
                         "entities": nlp_result.entities.to_dict(),

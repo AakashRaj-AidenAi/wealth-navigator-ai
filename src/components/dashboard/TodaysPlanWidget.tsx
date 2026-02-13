@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { supabase } from '@/integrations/supabase/client';
+import { api, extractItems } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -43,40 +43,41 @@ export const TodaysPlanWidget = () => {
 
   const fetchTodaysTasks = async () => {
     if (!user) return;
-    
-    const today = new Date().toISOString().split('T')[0];
-    
-    // Fetch today's high priority tasks + any overdue
-    const { data } = await supabase
-      .from('tasks')
-      .select('id, title, priority, status, due_date, due_time, client_id, clients(client_name)')
-      .eq('assigned_to', user.id)
-      .neq('status', 'done')
-      .neq('status', 'cancelled')
-      .or(`due_date.eq.${today},due_date.lt.${today}`)
-      .order('due_date', { ascending: true })
-      .limit(6);
 
-    if (data) {
+    const today = new Date().toISOString().split('T')[0];
+
+    try {
+      // Fetch today's high priority tasks + any overdue
+      const dataRes = await api.get('/tasks', {
+        assigned_to: user.id,
+        status_not_in: 'done,cancelled',
+        due_date_lte: today,
+        _sort: 'due_date',
+        _order: 'asc',
+        _limit: '6'
+      });
+
+      const data = extractItems<Task>(dataRes);
+
       // Sort by priority
-      const sorted = data.sort((a, b) => 
-        priorityOrder[a.priority as keyof typeof priorityOrder] - 
+      const sorted = data.sort((a, b) =>
+        priorityOrder[a.priority as keyof typeof priorityOrder] -
         priorityOrder[b.priority as keyof typeof priorityOrder]
       );
-      setTasks(sorted as Task[]);
+      setTasks(sorted);
+    } catch (err) {
+      console.error('Failed to load today\'s tasks:', err);
     }
     setLoading(false);
   };
 
   const handleComplete = async (taskId: string) => {
-    const { error } = await supabase
-      .from('tasks')
-      .update({ status: 'done', completed_at: new Date().toISOString() })
-      .eq('id', taskId);
-
-    if (!error) {
+    try {
+      await api.put('/tasks/' + taskId, { status: 'done', completed_at: new Date().toISOString() });
       toast.success('Task completed!');
       fetchTodaysTasks();
+    } catch (err) {
+      console.error('Failed to complete task:', err);
     }
   };
 
