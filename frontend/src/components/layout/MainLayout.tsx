@@ -21,7 +21,7 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
           expanded ? 'ml-[calc(256px+24px)]' : 'ml-[calc(64px+24px)]'
         )}
       >
-        <div className="pt-3 pr-3">
+        <div className="sticky top-0 z-30 pt-3 pr-3">
           <Header />
         </div>
         <main className="flex-1 p-6">
