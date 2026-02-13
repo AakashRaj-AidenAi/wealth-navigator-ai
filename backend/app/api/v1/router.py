@@ -21,6 +21,7 @@ from app.api.v1.leads import router as leads_router
 from app.api.v1.orders import router as orders_router
 from app.api.v1.portfolios import router as portfolios_router
 from app.api.v1.reports import router as reports_router
+from app.api.v1.market import router as market_router
 from app.api.v1.tasks import router as tasks_router
 
 v1_router = APIRouter()
@@ -44,6 +45,7 @@ v1_router.include_router(admin_router, prefix="/admin", tags=["admin"])
 v1_router.include_router(reports_router, prefix="/reports", tags=["reports"])
 v1_router.include_router(insights_router, prefix="/insights", tags=["insights"])
 v1_router.include_router(tasks_router, prefix="/tasks", tags=["tasks"])
+v1_router.include_router(market_router, prefix="/market", tags=["market"])
 
 # ---------------------------------------------------------------------------
 # Legacy/Alternative Routes

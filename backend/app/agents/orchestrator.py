@@ -24,7 +24,21 @@ INTENT_AGENT_MAP = {
     "lead_management": "growth_engine",
     "campaign_creation": "growth_engine",
     "churn_prediction": "growth_engine",
-    "report_generation": "cio_strategy",
+    "report_generation": "report_analytics",
+    # Task management
+    "task_management": "task_workflow",
+    "task_creation": "task_workflow",
+    # Analytics & reporting
+    "analytics_query": "report_analytics",
+    # Communications
+    "communication_draft": "communications",
+    "email_request": "communications",
+    # Goal planning
+    "goal_tracking": "goal_planning",
+    "financial_planning": "goal_planning",
+    # Client onboarding
+    "client_onboarding": "onboarding",
+    "document_collection": "onboarding",
 }
 
 
@@ -114,16 +128,22 @@ class Orchestrator:
     ):
         """Process and stream response from the appropriate agent.
 
-        Yields dicts with type/content/metadata for WebSocket delivery.
+        Yields dicts with type/content/metadata for SSE/WebSocket delivery.
         """
-        intent = "general_chat"
-        if nlp_result and "intent" in nlp_result:
-            intent = nlp_result["intent"].get("name", "general_chat")
-            confidence = nlp_result["intent"].get("confidence", 0.0)
-            if confidence < 0.4:
-                intent = "general_chat"
+        # Check if a specific agent was requested by the frontend
+        forced_agent = context.metadata.get("forced_agent")
+        if forced_agent:
+            agent_name = forced_agent
+            intent = forced_agent
+        else:
+            intent = "general_chat"
+            if nlp_result and "intent" in nlp_result:
+                intent = nlp_result["intent"].get("name", "general_chat")
+                confidence = nlp_result["intent"].get("confidence", 0.0)
+                if confidence < 0.4:
+                    intent = "general_chat"
+            agent_name = self.select_agent(intent)
 
-        agent_name = self.select_agent(intent)
         agent = get_agent(agent_name)
 
         if agent is None:
@@ -158,6 +178,7 @@ class Orchestrator:
             {
                 "name": agent.name,
                 "description": agent.description,
+                "category": getattr(agent, "category", "advisory"),
             }
             for agent in agents.values()
         ]

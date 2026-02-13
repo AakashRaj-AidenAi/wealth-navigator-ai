@@ -15,6 +15,7 @@ class TaxOptimizerAgent(BaseAgent):
         "Identifies tax-loss harvesting opportunities, LTCG/STCG implications, "
         "and Section 80C opportunities for Indian taxation."
     )
+    category = "analysis"
     system_prompt = (
         "You are a tax optimization specialist for Indian capital gains and investment "
         "taxation. You identify tax-saving opportunities and help minimize the tax "

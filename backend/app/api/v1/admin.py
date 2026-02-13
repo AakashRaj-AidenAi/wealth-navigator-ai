@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_current_active_user, get_db
 from app.models.compliance import AuditLog
 from app.models.user import User
+from app.models.client import Client
 
 router = APIRouter()
 
@@ -116,3 +117,40 @@ async def list_users(
     result = await db.execute(query)
     users = result.scalars().all()
     return [UserResponse.model_validate(u) for u in users]
+
+
+@router.post("/sync-graph")
+async def sync_graph(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """One-time backfill of existing data into the Neo4j knowledge graph. Admin only."""
+    _require_admin(current_user)
+
+    from app.core.neo4j import is_neo4j_available
+    from app.services.graph_sync import sync_user, sync_client
+
+    if not is_neo4j_available():
+        raise HTTPException(status_code=503, detail="Neo4j is not available")
+
+    synced = {"users": 0, "clients": 0}
+
+    # Sync all users
+    users_result = await db.execute(select(User))
+    for u in users_result.scalars().all():
+        await sync_user(str(u.id), u.full_name or u.email, u.email, u.role)
+        synced["users"] += 1
+
+    # Sync all clients
+    clients_result = await db.execute(select(Client))
+    for c in clients_result.scalars().all():
+        await sync_client(
+            user_id=str(c.advisor_id) if hasattr(c, "advisor_id") and c.advisor_id else str(current_user.id),
+            client_id=str(c.id),
+            name=c.full_name if hasattr(c, "full_name") else str(c.id),
+            email=c.email if hasattr(c, "email") else None,
+            status=c.status if hasattr(c, "status") else "active",
+        )
+        synced["clients"] += 1
+
+    return {"synced": synced}

@@ -42,6 +42,7 @@ class BaseAgent:
 
     name: str = "base_agent"
     description: str = "Base agent"
+    category: str = "advisory"
     system_prompt: str = "You are a helpful assistant."
     tool_names: list[str] = []
     model: str = "gpt-4o"

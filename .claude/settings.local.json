@@ -6,7 +6,8 @@
       "Bash(npx tsc:*)",
       "Bash(ls:*)",
       "Bash(dir:*)",
-      "Bash(pushd:*)"
+      "Bash(pushd:*)",
+      "Bash(test:*)"
     ]
   }
 }

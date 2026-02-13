@@ -15,6 +15,7 @@ class FundingRiskAgent(BaseAgent):
         "Analyzes settlement risk, withdrawal patterns, cash flow forecasts, "
         "and funding alerts for wealth management operations."
     )
+    category = "operations"
     system_prompt = (
         "You are a cash flow and funding risk analyst for wealth management operations. "
         "You monitor funding pipelines, settlement processes, and client withdrawal "

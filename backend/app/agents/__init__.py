@@ -11,6 +11,12 @@ agent at application startup.
 import app.agents.tools.client_tools  # noqa: F401
 import app.agents.tools.funding_tools  # noqa: F401
 import app.agents.tools.portfolio_tools  # noqa: F401
+import app.agents.tools.graph_tools  # noqa: F401
+import app.agents.tools.task_tools  # noqa: F401
+import app.agents.tools.report_tools  # noqa: F401
+import app.agents.tools.communication_tools  # noqa: F401
+import app.agents.tools.goal_tools  # noqa: F401
+import app.agents.tools.onboarding_tools  # noqa: F401
 
 # Core agent infrastructure
 from app.agents.base_agent import AgentContext, AgentResponse, BaseAgent  # noqa: F401
@@ -32,6 +38,11 @@ from app.agents.growth_agent import GrowthEngineAgent  # noqa: F401
 from app.agents.meeting_agent import MeetingIntelligenceAgent  # noqa: F401
 from app.agents.portfolio_agent import PortfolioIntelligenceAgent  # noqa: F401
 from app.agents.tax_agent import TaxOptimizerAgent  # noqa: F401
+from app.agents.task_agent import TaskWorkflowAgent  # noqa: F401
+from app.agents.report_agent import ReportAnalyticsAgent  # noqa: F401
+from app.agents.communications_agent import CommunicationsAgent  # noqa: F401
+from app.agents.goal_agent import GoalPlanningAgent  # noqa: F401
+from app.agents.onboarding_agent import OnboardingAgent  # noqa: F401
 
 
 def initialize_agents() -> None:
@@ -45,6 +56,11 @@ def initialize_agents() -> None:
         MeetingIntelligenceAgent(),
         GrowthEngineAgent(),
         FundingRiskAgent(),
+        TaskWorkflowAgent(),
+        ReportAnalyticsAgent(),
+        CommunicationsAgent(),
+        GoalPlanningAgent(),
+        OnboardingAgent(),
     ]
 
     for agent in agents:
@@ -74,4 +90,9 @@ __all__ = [
     "MeetingIntelligenceAgent",
     "PortfolioIntelligenceAgent",
     "TaxOptimizerAgent",
+    "TaskWorkflowAgent",
+    "ReportAnalyticsAgent",
+    "CommunicationsAgent",
+    "GoalPlanningAgent",
+    "OnboardingAgent",
 ]

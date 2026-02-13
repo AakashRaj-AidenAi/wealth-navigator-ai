@@ -47,10 +47,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     initialize_agents()
     logger.info("AI agents initialized.")
 
+    # Initialize Neo4j knowledge graph (graceful fallback if unavailable)
+    from app.core.neo4j import init_neo4j
+    await init_neo4j()
+
     yield
 
     # Shutdown
     logger.info("Shutting down %s ...", settings.APP_NAME)
+
+    from app.core.neo4j import close_neo4j
+    await close_neo4j()
+
     await engine.dispose()
     logger.info("Database engine disposed.")
 
@@ -95,10 +103,14 @@ def create_app() -> FastAPI:
         except Exception:
             db_status = "unhealthy"
 
+        from app.core.neo4j import is_neo4j_available
+        neo4j_status = "healthy" if is_neo4j_available() else "unavailable"
+
         return {
             "status": "ok" if db_status == "healthy" else "degraded",
             "app": settings.APP_NAME,
             "database": db_status,
+            "neo4j": neo4j_status,
         }
 
     return app

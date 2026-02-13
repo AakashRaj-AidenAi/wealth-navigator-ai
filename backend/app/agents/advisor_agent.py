@@ -15,6 +15,7 @@ class AdvisorAssistantAgent(BaseAgent):
         "Helps wealth advisors with client recommendations, engagement "
         "strategies, relationship intelligence, and daily workflow."
     )
+    category = "advisory"
     system_prompt = (
         "You are a personal assistant for wealth advisors in the Indian financial "
         "services industry. You help with client recommendations, engagement strategies, "

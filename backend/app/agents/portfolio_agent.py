@@ -15,6 +15,7 @@ class PortfolioIntelligenceAgent(BaseAgent):
         "Analyzes portfolio drift, concentration risk, performance attribution, "
         "and provides data-driven investment insights."
     )
+    category = "analysis"
     system_prompt = (
         "You are an expert portfolio analyst specializing in Indian wealth management. "
         "You analyze portfolio drift, concentration risk, and performance attribution "

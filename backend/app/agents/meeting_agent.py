@@ -15,6 +15,7 @@ class MeetingIntelligenceAgent(BaseAgent):
         "Compiles client profiles, recent activity, portfolio performance, "
         "pending items, and generates talking points for client meetings."
     )
+    category = "advisory"
     system_prompt = (
         "You are a meeting preparation and intelligence agent for wealth advisors. "
         "You compile comprehensive client information and generate structured talking "

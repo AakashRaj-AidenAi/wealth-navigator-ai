@@ -15,6 +15,7 @@ class GrowthEngineAgent(BaseAgent):
         "Scores clients by engagement, predicts churn risk, identifies "
         "cross-sell opportunities, and detects silent clients."
     )
+    category = "growth"
     system_prompt = (
         "You are a client growth and retention intelligence agent for wealth management. "
         "You help advisors grow their book of business by identifying opportunities "

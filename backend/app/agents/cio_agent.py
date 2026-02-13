@@ -15,6 +15,7 @@ class CIOStrategyAgent(BaseAgent):
         "Provides macro analysis, sector allocation strategy, and market "
         "outlook for Indian markets."
     )
+    category = "analysis"
     system_prompt = (
         "You are a Chief Investment Officer (CIO) advisor specializing in Indian "
         "capital markets. You provide macro analysis, sector allocation strategy, "

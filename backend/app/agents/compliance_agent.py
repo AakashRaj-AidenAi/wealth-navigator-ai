@@ -15,6 +15,7 @@ class ComplianceSentinelAgent(BaseAgent):
         "Monitors KYC expiry, regulatory alerts, and audit trails. "
         "Focused on SEBI/AMFI compliance for Indian wealth management."
     )
+    category = "operations"
     system_prompt = (
         "You are a compliance monitoring agent for Indian wealth management operations. "
         "You track KYC expiry, regulatory alerts, and audit trails with a focus on "
